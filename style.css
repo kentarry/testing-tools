@@ -42,30 +42,33 @@ body{
 /* ═══ LAYOUT & SIDEBAR ═══ */
 .layout{display:flex;height:calc(100vh - 58px)}
 .nav{
-  width:260px;background:rgba(18,21,42,.6);backdrop-filter:blur(12px);
+  width:240px;background:rgba(18,21,42,.6);backdrop-filter:blur(12px);
   border-right:1px solid rgba(160,180,230,.1);
   overflow-y:auto;flex-shrink:0;
 }
-.platform-bar{display:flex;flex-direction:column;padding-bottom:20px}
-.pb-group{border-bottom:1px solid rgba(160,180,230,.05)}
+.platform-bar{display:flex;flex-direction:column;padding:8px 0}
+
+.pb-group{
+  border-bottom:1px solid rgba(160,180,230,.05);
+  cursor:pointer;transition:background .2s;
+}
+.pb-group:hover{background:rgba(129,140,248,.06)}
+.pb-group.selected{background:rgba(129,140,248,.12);border-left:3px solid var(--acc)}
 .pb-group-title{
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 20px;color:var(--t2);font-size:15px;font-weight:600;
-  cursor:pointer;transition:background .2s, color .2s;
+  transition:color .2s;
 }
-.pb-group-title:hover{background:rgba(129,140,248,.1);color:#fff}
+.pb-group.selected .pb-group-title{color:#fff}
 .pb-group-title .menu-icon{margin-right:10px;font-size:17px}
-.pb-group-title .caret{font-size:11px;transition:transform .3s;color:var(--t4)}
-.pb-group.open > .pb-group-title{color:#fff;background:rgba(255,255,255,.04)}
-.pb-group.open > .pb-group-title .caret{transform:rotate(180deg)}
-.pb-tools{display:none;list-style:none;padding:6px 0 14px 0;margin:0}
-.pb-group.open > .pb-tools{display:block}
-.pb-tools li > a{
-  display:flex;align-items:center;gap:8px;
-  padding:10px 20px 10px 40px;color:var(--t2);text-decoration:none;
-  font-size:13px;cursor:pointer;transition:background .2s;
+.pb-group-title .caret-arrow{font-size:13px;color:var(--t4);transition:color .2s}
+.pb-group.selected .caret-arrow{color:var(--acc)}
+.pb-tools{display:none;list-style:none;padding:0 0 12px 0;margin:0}
+.pb-group.selected .pb-tools{display:block}
+.pb-tools li{display:flex;align-items:center;gap:8px}
+.pb-tools li > span{
+  display:block;padding:6px 20px 6px 44px;color:var(--t3);font-size:12px;
 }
-.pb-tools li > a:hover{background:rgba(129,140,248,.1);color:#fff}
 
 /* ═══ MAIN ═══ */
 .main{flex:1;overflow-y:auto;padding:0}
@@ -75,13 +78,54 @@ body{
 .panel.show{display:block}
 @keyframes fUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-.p-head{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid rgba(160,180,230,.1)}
+.p-head{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(160,180,230,.1)}
 .p-title{font-size:22px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px;color:#fff}
 .p-desc{
   font-size:13px;color:var(--t2);
   background:rgba(31,36,69,.7);border:1px solid rgba(160,180,230,.1);
   border-radius:8px;padding:12px 14px;line-height:1.7;margin-bottom:6px;
   white-space:pre-line;
+}
+
+/* ═══ GAME SELECTOR ═══ */
+.game-selector{margin-bottom:16px}
+.game-selector-title{font-size:14px;font-weight:700;color:var(--accH);margin-bottom:10px}
+.game-btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.game-btn{
+  flex:1;min-width:140px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:18px 14px;
+  background:rgba(31,36,69,.6);
+  border:2px solid rgba(160,180,230,.1);
+  border-radius:14px;
+  color:var(--t2);font-family:inherit;
+  cursor:pointer;transition:all .3s;
+  position:relative;overflow:hidden;
+}
+.game-btn::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center, var(--gc), transparent 70%);
+  opacity:0;transition:opacity .3s;
+}
+.game-btn:hover{
+  border-color:color-mix(in srgb, var(--gc) 50%, transparent);
+  transform:translateY(-2px);
+  box-shadow:0 6px 24px rgba(0,0,0,.3);
+}
+.game-btn:hover::before{opacity:.08}
+.game-btn.active{
+  border-color:var(--gc);
+  background:color-mix(in srgb, var(--gc) 10%, rgba(31,36,69,.8));
+  color:#fff;
+  box-shadow:0 0 24px color-mix(in srgb, var(--gc) 25%, transparent);
+}
+.game-btn.active::before{opacity:.12}
+.game-btn-icon{font-size:28px;filter:drop-shadow(0 0 8px rgba(255,255,255,.2))}
+.game-btn-name{font-size:14px;font-weight:700;position:relative}
+.game-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:20px;
+  font-size:13px;font-weight:700;
 }
 
 /* ═══ FORM INPUTS ═══ */
@@ -98,6 +142,7 @@ body{
   background:rgba(20,24,51,.9);
 }
 .fi::placeholder{color:var(--t4);font-weight:400}
+.fi:disabled{opacity:.4;cursor:not-allowed}
 
 /* ═══ BUTTONS ═══ */
 .btn{
@@ -139,7 +184,7 @@ body{
 /* ═══ AI CHAT ═══ */
 .ai-chat-area{
   background:rgba(15,18,38,.6);border:1px solid rgba(160,180,230,.1);
-  border-radius:var(--rL);min-height:300px;max-height:450px;overflow-y:auto;margin-bottom:16px;
+  border-radius:var(--rL);min-height:250px;max-height:400px;overflow-y:auto;margin-bottom:16px;
 }
 .ai-chat-messages{display:flex;flex-direction:column;gap:10px;padding:18px}
 .ai-msg{padding:12px 16px;border-radius:12px;max-width:92%;animation:fUp .25s ease}
@@ -169,28 +214,12 @@ body{
 .ai-tools-group{font-size:13px;font-weight:700;color:var(--t2);margin-top:10px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(160,180,230,.06)}
 .ai-tools-item{font-size:12px;color:var(--t3);padding:2px 0 2px 16px;line-height:1.7}
 
-/* ═══ AI SKILL BUTTONS ═══ */
-.ai-skills{
-  background:rgba(31,36,69,.5);border:1px solid rgba(160,180,230,.1);
-  border-radius:var(--rL);padding:16px;margin-bottom:16px;
-}
-.ai-skill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
-.ai-skill-btn{
-  padding:10px 14px;background:rgba(20,24,51,.7);
-  border:1px solid rgba(160,180,230,.12);border-radius:10px;
-  color:var(--t1);font-size:13px;font-weight:600;font-family:inherit;
-  cursor:pointer;transition:all .25s;text-align:left;
-}
-.ai-skill-btn:hover{
-  background:rgba(129,140,248,.15);border-color:rgba(129,140,248,.4);
-  color:#fff;transform:translateY(-1px);box-shadow:0 4px 16px rgba(129,140,248,.2);
-}
-
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:768px){
   .nav{width:0;display:none}
   .panel{padding:20px 16px}
   .ai-input-row{flex-direction:column}
   .ai-input-row textarea{width:100% !important}
-  .ai-skill-grid{grid-template-columns:1fr}
+  .game-btn-row{flex-direction:column}
+  .game-btn{min-width:100%}
 }
