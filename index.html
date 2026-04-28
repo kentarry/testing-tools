@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤖 AI 自動改財產 | Standalone Tool</title>
+<meta name="description" content="AI 自動改財產 — 獨立網頁工具，支援明星3缺1、滿貫大亨、Vegas Frenzy 批量修改">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <span class="hdr-logo">🤖</span>
+    <h1>AI <b>自動改財產</b> <small>Standalone Tool</small></h1>
+  </div>
+  <div class="hdr-right">
+    <span class="hdr-ver" id="proxyStatus">☁️ 雲端模式</span>
+  </div>
+</header>
+
+<div class="toast-box" id="toastBox"></div>
+
+<div class="layout">
+  <aside class="nav" id="nav">
+    <div class="platform-bar" id="pbar"></div>
+  </aside>
+  <main class="main" id="main">
+    <div class="welcome" id="welcome" style="display:none"></div>
+    <div class="panel show" id="panel"></div>
+  </main>
+</div>
+
+<script src="platforms.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
