@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// AI 自動改財產 — Standalone App v3
+// AI 自動改財產 — Standalone App v3.1
 // ✅ 完全獨立，不依賴父專案
 // ✅ 預設雲端代理，免開 RUN.BAT
 // ✅ 支援 GitHub Pages 部署
@@ -12,41 +12,6 @@ function _registerAiTools() {
   PLATFORM_TMD.tools.forEach(t => AI_TOOL_REGISTRY.push({ platform: PLATFORM_TMD, tool: t, game: '滿貫大亨' }));
   PLATFORM_VF.tools.forEach(t => AI_TOOL_REGISTRY.push({ platform: PLATFORM_VF, tool: t, game: 'Vegas Frenzy' }));
 }
-
-// ── Skill definitions ──
-const AI_SKILLS = {
-  'aio-rich':  { desc: '🌟 明星 — 金幣+鑽石+VIP', steps: a => [
-    { id:'aio_money', p:{userName:a,currencyType:1,money:999999} },
-    { id:'aio_money', p:{userName:a,currencyType:2,money:999999} },
-    { id:'aio_vip',   p:{userName:a,level:10,tLevel:0,resetTime:0} },
-  ]},
-  'aio-max':   { desc: '🌟 明星 — 全拉滿', steps: a => [
-    { id:'aio_money', p:{userName:a,currencyType:1,money:9999999} },
-    { id:'aio_money', p:{userName:a,currencyType:2,money:9999999} },
-    { id:'aio_vip',   p:{userName:a,level:10,tLevel:0,resetTime:0} },
-    { id:'aio_level', p:{userName:a,targetLevel:99} },
-    { id:'aio_bp_score', p:{account:a,addScore:99999} },
-  ]},
-  'tmd-rich':  { desc: '🀄 滿貫 — 紅鑽+VIP', steps: a => [
-    { id:'tmd_money', p:{account:a,amount:999999} },
-    { id:'tmd_vip',   p:{account:a,vip:10} },
-  ]},
-  'tmd-max':   { desc: '🀄 滿貫 — 全拉滿', steps: a => [
-    { id:'tmd_money', p:{account:a,amount:9999999} },
-    { id:'tmd_vip',   p:{account:a,vip:10} },
-    { id:'tmd_horse', p:{account:a,level:5} },
-  ]},
-  'vf-rich':   { desc: '🎰 VF — 金幣+VIP', steps: a => [
-    { id:'vf_money', p:{accountId:parseInt(a,10)||0,currencyType:66,amount:'999999'} },
-    { id:'vf_vip',   p:{accountId:parseInt(a,10)||0,vipLv:10} },
-  ]},
-  'vf-max':    { desc: '🎰 VF — 全拉滿', steps: a => [
-    { id:'vf_money', p:{accountId:parseInt(a,10)||0,currencyType:66,amount:'9999999'} },
-    { id:'vf_vip',   p:{accountId:parseInt(a,10)||0,vipLv:10} },
-    { id:'vf_level', p:{accountId:parseInt(a,10)||0,Level:99} },
-    { id:'vf_bolt',  p:{accountId:parseInt(a,10)||0,boltPower:99999} },
-  ]},
-};
 
 // ── Keyword matching rules ──
 const AI_MATCH_RULES = [
@@ -107,12 +72,29 @@ function _aiParseRequest(account, request) {
   return results;
 }
 
-// ── Proxy helper ──
-function _getProxyUrl(url) {
+// ── Proxy helper (multiple fallback proxies) ──
+const CLOUD_PROXIES = [
+  url => `https://corsproxy.io/?${url}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
+async function _fetchViaProxy(url) {
   const useCloud = document.getElementById('aiCloudProxy')?.checked;
-  return useCloud
-    ? `https://corsproxy.io/?${encodeURIComponent(url)}`
-    : `http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`;
+  if (!useCloud) {
+    return fetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`);
+  }
+  // Try cloud proxies with fallback
+  let lastErr;
+  for (const mkProxy of CLOUD_PROXIES) {
+    try {
+      const proxyUrl = mkProxy(url);
+      const res = await fetch(proxyUrl);
+      if (res.ok || res.status < 500) return res;
+    } catch (e) { lastErr = e; }
+  }
+  // Last resort: direct fetch (works if server has CORS)
+  try { return await fetch(url); } catch(e) { lastErr = e; }
+  throw lastErr || new Error('All proxies failed');
 }
 
 // ── Execute via proxy ──
@@ -121,18 +103,8 @@ async function _aiExecTool(entry) {
   const qs = new URLSearchParams();
   if (params) Object.entries(params).forEach(([k,v]) => qs.append(k,v));
   const url = platform.base + tool.ep + (qs.toString() ? '?'+qs.toString() : '');
-  const res = await fetch(_getProxyUrl(url));
+  const res = await _fetchViaProxy(url);
   return { ok: res.ok, status: res.status, text: await res.text(), url };
-}
-
-async function _aiExecStep(step) {
-  const entry = AI_TOOL_REGISTRY.find(r => r.tool.id === step.id);
-  if (!entry) return { ok: false, status: 0, text: 'Tool not found: ' + step.id };
-  const qs = new URLSearchParams();
-  Object.entries(step.p).forEach(([k,v]) => qs.append(k,v));
-  const url = entry.platform.base + entry.tool.ep + '?' + qs.toString();
-  const res = await fetch(_getProxyUrl(url));
-  return { ok: res.ok, status: res.status, text: await res.text(), url, entry };
 }
 
 // ── Chat history ──
@@ -165,38 +137,6 @@ function _renderAiHistory() {
     return `<div class="ai-msg ai-msg-bot ${cls}"><div class="ai-msg-label">🤖 ${msg.game||'AI'} → ${msg.toolName||''}</div><div class="ai-msg-text">${_esc(msg.text)}</div>${msg.detail?`<div class="ai-msg-detail">${_esc(msg.detail)}</div>`:''}</div>`;
   }).join('');
   c.scrollTop = c.scrollHeight;
-}
-
-// ── Execute skill ──
-async function aiRunSkill(skillName) {
-  const accounts = _getAccounts();
-  if (!accounts.length) { toast('請先輸入帳號', 'err'); document.getElementById('aiAccountInput')?.focus(); return; }
-  const skill = AI_SKILLS[skillName];
-  if (!skill) { toast('未知技能', 'err'); return; }
-
-  _aiChatHistory.push({ role: 'user', account: accounts.join(', '), text: `⚡ 技能: ${skill.desc}  (${accounts.length} 帳號)` });
-  _aiChatHistory.push({ role: 'bot', ok: true, game: 'Skill', toolName: skillName, text: `⏳ 執行中... (${accounts.length} 帳號，並行模式)` });
-  _renderAiHistory();
-
-  const startTime = Date.now();
-  const allResults = await Promise.all(accounts.map(async account => {
-    const steps = skill.steps(account);
-    const results = await Promise.all(steps.map(s => _aiExecStep(s)));
-    return { account, steps, results };
-  }));
-
-  const elapsed = Date.now() - startTime;
-  const totalSteps = allResults.reduce((s, r) => s + r.results.length, 0);
-  const totalOk = allResults.reduce((s, r) => s + r.results.filter(x => x.ok).length, 0);
-  const allOk = totalOk === totalSteps;
-
-  _aiChatHistory[_aiChatHistory.length - 1] = {
-    role: 'bot', ok: allOk, game: 'Skill', toolName: skillName,
-    text: allOk ? `✅ 技能完成！(${accounts.length} 帳號，${totalOk}/${totalSteps} 成功，${elapsed}ms)` : `⚠️ 部分失敗 (${totalOk}/${totalSteps}，${elapsed}ms)`,
-    detail: allResults.map(ar => `👤 ${ar.account}: ` + ar.results.map((r, i) => `${r.ok?'✅':'❌'} ${ar.steps[i].id}`).join(' | ')).join('\\n')
-  };
-  _renderAiHistory();
-  toast(allOk ? `✅ 技能完成 ${accounts.length} 帳號 (${elapsed}ms)` : '⚠️ 部分失敗', allOk ? 'ok' : 'err');
 }
 
 // ── Main submit ──
@@ -249,8 +189,8 @@ async function aiSubmit() {
       ? `✅ 全部成功！(${accounts.length} 帳號 × ${testMatches.length} 工具 = ${totalOk}/${totalTasks}，${elapsed}ms)`
       : `⚠️ 部分失敗 (${totalOk}/${totalTasks}，${elapsed}ms)`,
     detail: allResults.map(ar =>
-      `👤 ${ar.account}: ` + ar.results.map(r => `${r.ok?'✅':'❌'} ${r.toolName}`).join(' | ')
-    ).join('\\n')
+      `👤 ${ar.account}: ` + ar.results.map(r => `${r.ok?'✅':'❌'} ${r.toolName} [${r.status}]`).join(' | ')
+    ).join('\n')
   };
   _renderAiHistory();
   toast(allOk ? `✅ ${accounts.length} 帳號批次完成 (${elapsed}ms)` : '⚠️ 部分失敗', allOk ? 'ok' : 'err');
@@ -283,12 +223,6 @@ function buildSidebar() {
 function renderMainPanel() {
   if (AI_TOOL_REGISTRY.length === 0) _registerAiTools();
 
-  let skillHtml = '<div class="ai-skills"><div class="ai-tools-ref-title">⚡ 一鍵技能 (Skills)</div><div class="ai-skill-grid">';
-  for (const [name, skill] of Object.entries(AI_SKILLS)) {
-    skillHtml += `<button class="ai-skill-btn" onclick="aiRunSkill('${name}')">${skill.desc}</button>`;
-  }
-  skillHtml += '</div></div>';
-
   let toolHtml = '<div class="ai-tools-ref"><div class="ai-tools-ref-title">📋 可用工具一覽</div>';
   const groups = {};
   AI_TOOL_REGISTRY.forEach(r => { if (!groups[r.game]) groups[r.game] = []; groups[r.game].push(r.tool); });
@@ -301,12 +235,11 @@ function renderMainPanel() {
   const panel = document.getElementById('panel');
   panel.innerHTML = `
     <div class="p-head">
-      <div class="p-title">🤖 AI 自動改財產 <span style="font-size:12px;color:var(--t3);margin-left:8px">v3 — Standalone</span></div>
-      <div class="p-desc">輸入帳號與需求，AI 自動辨識並執行。支援 <b>技能一鍵執行</b> 和 <b>批量模式</b>。
+      <div class="p-title">🤖 AI 自動改財產 <span style="font-size:12px;color:var(--t3);margin-left:8px">v3.1 — Standalone</span></div>
+      <div class="p-desc">輸入帳號與需求，AI 自動辨識並執行。支援 <b>批量模式</b>。
 範例：「明星 改金幣 500000」「滿貫 vip 8」「vf 改錢 100000」
 💡 此為獨立網頁版，預設使用雲端代理，無需開啟 RUN.BAT</div>
     </div>
-    ${skillHtml}
     <div class="ai-chat-area" id="aiChatArea">
       <div class="ai-chat-messages" id="aiChatMessages"></div>
     </div>
