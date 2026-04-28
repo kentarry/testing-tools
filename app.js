@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════
-// AI 自動改財產 — Standalone App v4
+// AI 自動改財產 — Standalone App v5
 // ✅ 先選遊戲再操作，避免改錯
-// ✅ 雲端代理免開 RUN.BAT
-// ✅ GitHub Pages 部署就緒
+// ✅ 每行獨立指令：帳號 指令 數值
+// ✅ 自動偵測本地代理（最快）
+// ✅ 雲端代理 Promise.any 賽跑 + 自動重試
 // ═══════════════════════════════════════════════════
 
 // ── Tool Registry ──
@@ -15,13 +16,13 @@ function _registerAiTools() {
 
 // ── Game definitions ──
 const GAMES = {
-  aio: { name: '明星3缺1', icon: '⭐', color: '#8b5cf6', platform: () => PLATFORM_AIO },
-  tmd: { name: '滿貫大亨', icon: '🀄', color: '#f59e0b', platform: () => PLATFORM_TMD },
-  vf:  { name: 'Vegas Frenzy', icon: '🎰', color: '#ec4899', platform: () => PLATFORM_VF },
+  aio: { name: '明星3缺1', icon: '⭐', color: '#8b5cf6' },
+  tmd: { name: '滿貫大亨', icon: '🀄', color: '#f59e0b' },
+  vf:  { name: 'Vegas Frenzy', icon: '🎰', color: '#ec4899' },
 };
 let selectedGame = null;
 
-// ── Match rules per game (no need to type game name) ──
+// ── Match rules per game ──
 const GAME_MATCH_RULES = {
   aio: [
     { id:'aio_money',   sub:['錢','金幣','鑽石','i幣','改錢','changebill','幣','money'], mapFn: _mapAioMoney },
@@ -89,87 +90,95 @@ function _aiParseRequest(account, request) {
 }
 
 // ══════════════════════════════════════════
-// ⚡ HIGH-SPEED PROXY ENGINE
-// ✅ Promise.any = race all proxies simultaneously
-// ✅ Auto-retry up to 2 times on failure
-// ✅ 8s timeout per request
-// ✅ Auto-detect fastest proxy & remember it
+// ⚡ PROXY ENGINE — Auto-detect + Race
 // ══════════════════════════════════════════
+let _proxyMode = 'detecting'; // 'local' | 'cloud' | 'detecting'
+let _bestCloudProxy = null;
 
-const PROXY_LIST = [
+const CLOUD_PROXIES = [
   { name:'corsproxy',  mk: url => `https://corsproxy.io/?${url}` },
   { name:'allorigins', mk: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
-  { name:'corsh',      mk: url => `https://cors-anywhere.herokuapp.com/${url}` },
 ];
-let _bestProxy = null; // remember fastest proxy
 
-function _withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))
-  ]);
+function _timeout(promise, ms) {
+  return Promise.race([promise, new Promise((_,r) => setTimeout(() => r(new Error('Timeout')), ms))]);
+}
+
+// Auto-detect: try local proxy first
+async function _detectProxy() {
+  try {
+    const res = await _timeout(fetch('http://localhost:8787/api/proxy?url=' + encodeURIComponent('https://httpbin.org/get')), 2000);
+    if (res.ok) { _proxyMode = 'local'; _updateProxyBadge(); return; }
+  } catch(e) {}
+  _proxyMode = 'cloud';
+  _updateProxyBadge();
+}
+
+function _updateProxyBadge() {
+  const el = document.getElementById('proxyStatus');
+  if (!el) return;
+  if (_proxyMode === 'local') {
+    el.textContent = '🚀 本地代理 (極速)';
+    el.style.background = 'rgba(52,211,153,.15)';
+    el.style.color = '#6ee7b7';
+  } else {
+    el.textContent = '☁️ 雲端代理';
+    el.style.background = 'rgba(129,140,248,.15)';
+    el.style.color = '#a5b4fc';
+  }
 }
 
 async function _fetchViaProxy(url) {
-  const useCloud = document.getElementById('aiCloudProxy')?.checked;
-  if (!useCloud) {
-    return _withTimeout(fetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`), 8000);
+  // Local proxy (fastest)
+  if (_proxyMode === 'local') {
+    return _timeout(fetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`), 8000);
   }
-
-  // If we know the fastest proxy, try it first
-  if (_bestProxy) {
+  // Cloud: if we know the best proxy, try it first
+  if (_bestCloudProxy) {
     try {
-      const res = await _withTimeout(fetch(_bestProxy.mk(url)), 6000);
+      const res = await _timeout(fetch(_bestCloudProxy.mk(url)), 5000);
       if (res.ok || res.status < 500) return res;
-    } catch(e) { _bestProxy = null; /* reset, try all */ }
+    } catch(e) { _bestCloudProxy = null; }
   }
-
-  // Race ALL proxies simultaneously — fastest wins
-  const racePromises = PROXY_LIST.map(p =>
-    _withTimeout(fetch(p.mk(url)), 8000)
-      .then(res => {
-        if (!res.ok && res.status >= 500) throw new Error(`${p.name}: ${res.status}`);
-        _bestProxy = p; // remember winner
+  // Race all cloud proxies
+  try {
+    return await Promise.any(CLOUD_PROXIES.map(p =>
+      _timeout(fetch(p.mk(url)), 8000).then(res => {
+        if (!res.ok && res.status >= 500) throw new Error(`${p.name}:${res.status}`);
+        _bestCloudProxy = p;
         return res;
       })
-  );
-
-  try {
-    return await Promise.any(racePromises);
+    ));
   } catch(e) {
-    // All failed, try direct
-    try { return await _withTimeout(fetch(url), 5000); } catch(e2) {}
+    // Last resort: direct
+    try { return await _timeout(fetch(url), 5000); } catch(e2) {}
     throw new Error('所有代理皆失敗');
   }
 }
 
-// ── Execute with auto-retry ──
-const MAX_RETRIES = 2;
-
+// ── Execute with retry ──
 async function _aiExecTool(entry) {
   const { platform, tool, params } = entry;
   const qs = new URLSearchParams();
   if (params) Object.entries(params).forEach(([k,v]) => qs.append(k,v));
   const url = platform.base + tool.ep + (qs.toString() ? '?'+qs.toString() : '');
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let i = 0; i < 2; i++) {
     try {
       const res = await _fetchViaProxy(url);
       const text = await res.text();
-      if (res.ok) return { ok: true, status: res.status, text, url };
-      // Non-ok but got a response — don't retry
-      return { ok: false, status: res.status, text, url };
+      return { ok: res.ok, status: res.status, text, url };
     } catch(e) {
-      if (attempt === MAX_RETRIES) return { ok: false, status: 0, text: e.message, url };
-      await new Promise(r => setTimeout(r, 300 * (attempt + 1))); // short backoff
+      if (i === 1) return { ok: false, status: 0, text: e.message, url };
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 }
 
-// ── Chat history ──
+// ══════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════
 let _aiChatHistory = [];
 
-// ── Helpers ──
 function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 function toast(msg, type='ok') {
   const box = document.getElementById('toastBox');
@@ -178,11 +187,6 @@ function toast(msg, type='ok') {
   el.textContent = msg;
   box.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
-}
-
-function _getAccounts() {
-  const raw = document.getElementById('aiAccountInput')?.value || '';
-  return raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
 }
 
 function _renderAiHistory() {
@@ -200,124 +204,119 @@ function _renderAiHistory() {
 function selectGame(gameKey) {
   selectedGame = gameKey;
   const g = GAMES[gameKey];
-  // Update button states
   document.querySelectorAll('.game-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('game-' + gameKey)?.classList.add('active');
-  // Update accent color
   document.documentElement.style.setProperty('--acc', g.color);
-  // Show selected game badge
   const badge = document.getElementById('selectedGameBadge');
   if (badge) badge.innerHTML = `<span class="game-badge" style="background:${g.color}20;color:${g.color};border:1px solid ${g.color}55">${g.icon} ${g.name}</span>`;
-  // Update placeholder & enable input
-  const reqInput = document.getElementById('aiRequestInput');
-  if (reqInput) {
-    reqInput.disabled = false;
-    const examples = {
-      aio: '例：改金幣 500000、vip 8、改鑽石 100000',
-      tmd: '例：改錢 500000、vip 8、金馬 5',
-      vf:  '例：改錢 100000、vip 5、等級 10',
+  const cmdInput = document.getElementById('aiCommandInput');
+  if (cmdInput) {
+    cmdInput.disabled = false;
+    const ex = {
+      aio: 'ray1 vip 8\nray2 改金幣 500000\nray3 改鑽石 100000',
+      tmd: 'ray1 vip 5\nray2 改錢 200000\nray3 金馬 3',
+      vf:  '163436 vip 5\n163437 改錢 100000',
     };
-    reqInput.placeholder = examples[gameKey] || '';
+    cmdInput.placeholder = ex[gameKey] || '';
   }
-  // Update sidebar highlight
   document.querySelectorAll('.pb-group').forEach(g => g.classList.remove('selected'));
   document.getElementById('sidebar-' + gameKey)?.classList.add('selected');
-  // Update available tools display
   const toolLabel = document.getElementById('toolListGameName');
   if (toolLabel) toolLabel.textContent = `— ${g.icon} ${g.name}`;
   _updateToolList();
-  // Focus input
-  document.getElementById('aiAccountInput')?.focus();
+  cmdInput?.focus();
   toast(`已選擇 ${g.icon} ${g.name}`, 'info');
 }
 
 function _updateToolList() {
   const container = document.getElementById('toolListContent');
   if (!container || !selectedGame) return;
-  const tools = AI_TOOL_REGISTRY.filter(r => r.game === selectedGame ||
-    (selectedGame === 'aio' && r.game === '明星3缺1') ||
-    (selectedGame === 'tmd' && r.game === '滿貫大亨') ||
-    (selectedGame === 'vf' && r.game === 'Vegas Frenzy'));
-  const g = GAMES[selectedGame];
+  const tools = AI_TOOL_REGISTRY.filter(r => r.game === selectedGame);
   container.innerHTML = tools.map(r =>
     `<div class="ai-tools-item">${r.tool.icon} ${r.tool.name}</div>`
   ).join('');
 }
 
-// ── Main submit ──
+// ══════════════════════════════════════════
+// ⚡ SUBMIT — Parse each line as: account command [value]
+// ══════════════════════════════════════════
 async function aiSubmit() {
   if (!selectedGame) { toast('⚠️ 請先選擇遊戲平台！', 'err'); return; }
-
-  const requestEl = document.getElementById('aiRequestInput');
-  const accounts = _getAccounts();
-  const request = requestEl.value.trim();
   const g = GAMES[selectedGame];
+  const cmdInput = document.getElementById('aiCommandInput');
+  const raw = cmdInput?.value?.trim() || '';
+  if (!raw) { toast('請輸入指令', 'err'); cmdInput?.focus(); return; }
 
-  if (!accounts.length) { toast('請輸入帳號', 'err'); document.getElementById('aiAccountInput')?.focus(); return; }
-  if (!request) { toast('請輸入需求', 'err'); requestEl.focus(); return; }
+  // Parse lines: each line = "account command [value]"
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const tasks = [];
+  for (const line of lines) {
+    const parts = line.split(/\s+/);
+    const account = parts[0];
+    const command = parts.slice(1).join(' ');
+    if (!account || !command) continue;
+    const matches = _aiParseRequest(account, command);
+    if (matches.length > 0) {
+      tasks.push({ account, command, matches });
+    } else {
+      tasks.push({ account, command, matches: [], error: '無法辨識' });
+    }
+  }
 
-  _aiChatHistory.push({ role: 'user', account: accounts.join(', '), text: `[${g.icon} ${g.name}] ${request}  (${accounts.length} 帳號)` });
-  requestEl.value = '';
-
-  const testMatches = _aiParseRequest(accounts[0], request);
-  if (testMatches.length === 0) {
-    const rules = GAME_MATCH_RULES[selectedGame] || [];
-    const keywords = rules.map(r => r.sub.slice(0,2).join('、')).join('、');
-    _aiChatHistory.push({ role:'bot', ok:false, game:g.name, toolName:'無法辨識',
-      text:'❌ 無法辨識需求',
-      detail:`${g.name} 支援的關鍵字：${keywords}\n範例：「改金幣 500000」「vip 8」` });
-    _renderAiHistory();
-    toast('❌ 無法辨識需求', 'err');
+  if (tasks.length === 0) {
+    toast('❌ 沒有可執行的指令', 'err');
     return;
   }
 
-  const startTime = Date.now();
-  _aiChatHistory.push({ role:'bot', ok:true, game:g.name, toolName:'批次執行',
-    text:`⏳ ${g.icon} ${g.name} — 批次執行 ${accounts.length} 帳號 × ${testMatches.length} 工具...` });
-  _renderAiHistory();
+  // Show user message
+  const summary = tasks.map(t => `${t.account} ${t.command}`).join('\n');
+  _aiChatHistory.push({ role: 'user', account: `${tasks.length} 筆`, text: `[${g.icon} ${g.name}]\n${summary}` });
 
-  const allResults = await Promise.all(accounts.map(async account => {
-    const matches = _aiParseRequest(account, request);
-    const results = await Promise.all(matches.map(async entry => {
-      if (!entry.params) return { ok: false, status: 0, text: '需要手動操作', toolName: entry.tool.name };
+  // Show processing
+  _aiChatHistory.push({ role:'bot', ok:true, game:g.name, toolName:'批次執行',
+    text:`⏳ 並行執行 ${tasks.length} 筆指令... [${_proxyMode === 'local' ? '🚀本地' : '☁️雲端'}]` });
+  _renderAiHistory();
+  cmdInput.value = '';
+
+  const startTime = Date.now();
+
+  // Execute ALL tasks in parallel
+  const results = await Promise.all(tasks.map(async task => {
+    if (task.error) return { ...task, results: [{ ok:false, status:0, text:task.error, toolName:'❌' }] };
+    const execResults = await Promise.all(task.matches.map(async entry => {
       try {
         const r = await _aiExecTool(entry);
         return { ...r, toolName: entry.tool.name };
       } catch(e) {
-        return { ok: false, status: 0, text: e.message, toolName: entry.tool.name };
+        return { ok:false, status:0, text:e.message, toolName: entry.tool.name };
       }
     }));
-    return { account, results };
+    return { ...task, results: execResults };
   }));
 
   const elapsed = Date.now() - startTime;
-  const totalTasks = allResults.reduce((s, r) => s + r.results.length, 0);
-  const totalOk = allResults.reduce((s, r) => s + r.results.filter(x => x.ok).length, 0);
+  const totalOk = results.reduce((s, t) => s + t.results.filter(r => r.ok).length, 0);
+  const totalTasks = results.reduce((s, t) => s + t.results.length, 0);
   const allOk = totalOk === totalTasks;
 
   _aiChatHistory[_aiChatHistory.length - 1] = {
     role:'bot', ok:allOk, game:g.name, toolName:'批次執行',
     text: allOk
-      ? `✅ 全部成功！(${accounts.length} 帳號 × ${testMatches.length} 工具 = ${totalOk}/${totalTasks}，${elapsed}ms)`
-      : `⚠️ 部分失敗 (${totalOk}/${totalTasks}，${elapsed}ms)`,
-    detail: allResults.map(ar =>
-      `👤 ${ar.account}: ` + ar.results.map(r => `${r.ok?'✅':'❌'} ${r.toolName} [${r.status}]`).join(' | ')
+      ? `✅ 全部成功！(${totalOk}/${totalTasks} 筆，${elapsed}ms)`
+      : `⚠️ ${totalOk}/${totalTasks} 成功 (${elapsed}ms)`,
+    detail: results.map(t =>
+      `👤 ${t.account} [${t.command}]: ` + t.results.map(r => `${r.ok?'✅':'❌'} ${r.toolName}`).join(' ')
     ).join('\n')
   };
   _renderAiHistory();
-  toast(allOk ? `✅ ${accounts.length} 帳號批次完成 (${elapsed}ms)` : '⚠️ 部分失敗', allOk ? 'ok' : 'err');
+  toast(allOk ? `✅ ${totalTasks} 筆全部完成 (${elapsed}ms)` : `⚠️ ${totalOk}/${totalTasks} 成功`, allOk ? 'ok' : 'err');
 }
 
 // ═══ BUILD SIDEBAR ═══
 function buildSidebar() {
   const pbar = document.getElementById('pbar');
-  const platforms = [
-    { key:'aio', p: PLATFORM_AIO },
-    { key:'tmd', p: PLATFORM_TMD },
-    { key:'vf',  p: PLATFORM_VF },
-  ];
   let html = '';
-  platforms.forEach(({ key, p }) => {
+  [['aio', PLATFORM_AIO], ['tmd', PLATFORM_TMD], ['vf', PLATFORM_VF]].forEach(([key, p]) => {
     const g = GAMES[key];
     html += `<div class="pb-group" id="sidebar-${key}" onclick="selectGame('${key}')">
       <div class="pb-group-title">
@@ -335,13 +334,16 @@ function buildSidebar() {
 // ═══ RENDER MAIN PANEL ═══
 function renderMainPanel() {
   if (AI_TOOL_REGISTRY.length === 0) _registerAiTools();
-
   const panel = document.getElementById('panel');
   panel.innerHTML = `
     <div class="p-head">
-      <div class="p-title">🤖 AI 自動改財產 <span style="font-size:12px;color:var(--t3);margin-left:8px">v4</span></div>
-      <div class="p-desc">① 選擇遊戲 → ② 輸入帳號 → ③ 輸入需求 → ④ 執行
-💡 不需要在指令中輸入遊戲名稱，選了就會自動對應！</div>
+      <div class="p-title">🤖 AI 自動改財產 <span style="font-size:12px;color:var(--t3);margin-left:8px">v5</span></div>
+      <div class="p-desc">① 選擇遊戲 → ② 輸入指令（每行一筆） → ③ 執行
+每行格式：<code>帳號 指令 數值</code>
+範例：
+<code>ray1 vip 1
+ray2 vip 2
+ray3 改金幣 500000</code></div>
     </div>
 
     <div class="game-selector">
@@ -363,28 +365,26 @@ function renderMainPanel() {
     </div>
 
     <div class="ai-input-area">
-      <div class="ai-input-row">
-        <textarea class="fi ai-input" id="aiAccountInput" placeholder="② 帳號（每行一個）" style="width:160px;flex-shrink:0;min-height:60px;resize:vertical;font-family:inherit;line-height:1.5"></textarea>
-        <input class="fi ai-input" type="text" id="aiRequestInput" placeholder="③ 先選擇上方遊戲平台..." style="flex:1" disabled
-          onkeydown="if(event.key==='Enter')aiSubmit()">
+      <div class="ai-input-col">
+        <textarea class="fi ai-cmd-input" id="aiCommandInput" disabled
+          placeholder="② 先選擇上方遊戲平台..."
+          rows="5"></textarea>
         <button class="btn btn-go ai-send-btn" onclick="aiSubmit()">⚡ 執行</button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
-        <label style="font-size:12px;color:var(--accH);display:flex;align-items:center;gap:4px" title="免開 RUN.BAT">
-          <input type="checkbox" id="aiCloudProxy" checked> ☁️ 雲端代理
-        </label>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        <span class="proxy-badge" id="proxyBadge">偵測中...</span>
         <button class="btn btn-rst" style="font-size:11px;padding:3px 10px;margin-left:auto" onclick="_aiChatHistory=[];_renderAiHistory()">🗑️ 清除紀錄</button>
       </div>
     </div>
 
     <div class="ai-tools-ref" id="toolListArea">
       <div class="ai-tools-ref-title">📋 可用工具 <span id="toolListGameName" style="font-size:12px;color:var(--t3)">（請先選擇遊戲）</span></div>
-      <div id="toolListContent" class="ai-tools-item" style="color:var(--t4)">← 點選左側或上方的遊戲平台</div>
+      <div id="toolListContent" class="ai-tools-item" style="color:var(--t4)">← 點選上方的遊戲平台</div>
     </div>`;
-
   _renderAiHistory();
 }
 
 // ═══ INIT ═══
 buildSidebar();
 renderMainPanel();
+_detectProxy();
