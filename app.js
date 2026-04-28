@@ -88,35 +88,82 @@ function _aiParseRequest(account, request) {
   return results;
 }
 
-// ── Cloud proxy with fallback ──
-const CLOUD_PROXIES = [
-  url => `https://corsproxy.io/?${url}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+// ══════════════════════════════════════════
+// ⚡ HIGH-SPEED PROXY ENGINE
+// ✅ Promise.any = race all proxies simultaneously
+// ✅ Auto-retry up to 2 times on failure
+// ✅ 8s timeout per request
+// ✅ Auto-detect fastest proxy & remember it
+// ══════════════════════════════════════════
+
+const PROXY_LIST = [
+  { name:'corsproxy',  mk: url => `https://corsproxy.io/?${url}` },
+  { name:'allorigins', mk: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+  { name:'corsh',      mk: url => `https://cors-anywhere.herokuapp.com/${url}` },
 ];
+let _bestProxy = null; // remember fastest proxy
+
+function _withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))
+  ]);
+}
+
 async function _fetchViaProxy(url) {
   const useCloud = document.getElementById('aiCloudProxy')?.checked;
   if (!useCloud) {
-    return fetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`);
+    return _withTimeout(fetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`), 8000);
   }
-  let lastErr;
-  for (const mkProxy of CLOUD_PROXIES) {
+
+  // If we know the fastest proxy, try it first
+  if (_bestProxy) {
     try {
-      const res = await fetch(mkProxy(url));
+      const res = await _withTimeout(fetch(_bestProxy.mk(url)), 6000);
       if (res.ok || res.status < 500) return res;
-    } catch (e) { lastErr = e; }
+    } catch(e) { _bestProxy = null; /* reset, try all */ }
   }
-  try { return await fetch(url); } catch(e) { lastErr = e; }
-  throw lastErr || new Error('All proxies failed');
+
+  // Race ALL proxies simultaneously — fastest wins
+  const racePromises = PROXY_LIST.map(p =>
+    _withTimeout(fetch(p.mk(url)), 8000)
+      .then(res => {
+        if (!res.ok && res.status >= 500) throw new Error(`${p.name}: ${res.status}`);
+        _bestProxy = p; // remember winner
+        return res;
+      })
+  );
+
+  try {
+    return await Promise.any(racePromises);
+  } catch(e) {
+    // All failed, try direct
+    try { return await _withTimeout(fetch(url), 5000); } catch(e2) {}
+    throw new Error('所有代理皆失敗');
+  }
 }
 
-// ── Execute ──
+// ── Execute with auto-retry ──
+const MAX_RETRIES = 2;
+
 async function _aiExecTool(entry) {
   const { platform, tool, params } = entry;
   const qs = new URLSearchParams();
   if (params) Object.entries(params).forEach(([k,v]) => qs.append(k,v));
   const url = platform.base + tool.ep + (qs.toString() ? '?'+qs.toString() : '');
-  const res = await _fetchViaProxy(url);
-  return { ok: res.ok, status: res.status, text: await res.text(), url };
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await _fetchViaProxy(url);
+      const text = await res.text();
+      if (res.ok) return { ok: true, status: res.status, text, url };
+      // Non-ok but got a response — don't retry
+      return { ok: false, status: res.status, text, url };
+    } catch(e) {
+      if (attempt === MAX_RETRIES) return { ok: false, status: 0, text: e.message, url };
+      await new Promise(r => setTimeout(r, 300 * (attempt + 1))); // short backoff
+    }
+  }
 }
 
 // ── Chat history ──
