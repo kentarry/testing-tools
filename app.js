@@ -87,7 +87,7 @@ const GAME_ACTIONS = {
         { k: 'style', lbl: '樣式(0一般/1登入/2升級/3儲值)', def: 0 },
         { k: 'gainEndTime', lbl: '領取期限', def: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 19).replace('T', ' '), type: 'text' }
       ],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: parseInt(f.style, 10) || 0, gainEndTime: f.gainEndTime })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: parseInt(f.style, 10) || 0, gainEndTime: '"' + f.gainEndTime + '"' })
     },
     {
       id: 'vf_inbox', ep: '/Test_Inbox_InsertMail', icon: '📬', label: 'Inbox塞信件',
@@ -97,13 +97,13 @@ const GAME_ACTIONS = {
         { k: 'prizeCode', lbl: 'Prize Code', def: '00060066', type: 'text' },
         { k: 'amount', lbl: '獎項數量', def: '1000', type: 'text' }
       ],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, mailType: parseInt(f.mailType, 10) || 5, endTime: f.endTime, prizeCode: f.prizeCode, amount: String(f.amount) })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, mailType: parseInt(f.mailType, 10) || 5, endTime: '"' + f.endTime + '"', prizeCode: f.prizeCode, amount: String(f.amount) })
     },
     // ── 儲值 ──
     {
       id: 'vf_deposit', ep: '/Test_Add_UserStoredValueRecord', icon: '💳', label: '新增儲值紀錄',
       fields: [{ k: 'price', lbl: '金額(USD)', def: 4.99 }, { k: 'time', lbl: '時間', def: new Date().toISOString().slice(0, 19).replace('T', ' '), type: 'text' }],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, price: f.price, time: f.time })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, price: f.price, time: '"' + f.time + '"' })
     },
     { id: 'vf_delDeposit', ep: '/Test_Delete_UserStoredValueRecord', icon: '🗑️', label: '刪除儲值紀錄', vLabel: '近N日(-1全刪)', def: -1, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, days: v }) },
     // ── Battle Pass ──
@@ -138,7 +138,7 @@ const GAME_ACTIONS = {
     {
       id: 'vf_createTime', ep: '/Test_ModifyAccountCreateTime', icon: '🕐', label: '修改建立時間',
       fields: [{ k: 'accountCreateTime', lbl: '時間(YYYY-MM-DD HH:MM:SS)', def: new Date().toISOString().slice(0, 19).replace('T', ' '), type: 'text' }],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, accountCreateTime: f.accountCreateTime })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, accountCreateTime: '"' + f.accountCreateTime + '"' })
     },
     {
       id: 'vf_region', ep: '/Test_ModifyAccountRegisterAreaCode', icon: '🌍', label: '修改註冊地區',
