@@ -446,6 +446,15 @@ async function _execApi(base, ep, params) {
   const qs = new URLSearchParams();
   if (params) Object.entries(params).forEach(([k, v]) => qs.append(k, v));
   const url = base + ep + (qs.toString() ? '?' + qs.toString() : '');
+
+  // 策略：先嘗試直連（VF 有 CORS headers）→ 失敗才走代理
+  try {
+    const directRes = await _timedFetch(url, 4000);
+    if (directRes.ok || directRes.status < 500) {
+      return { ok: directRes.ok, status: directRes.status, text: await directRes.text(), url };
+    }
+  } catch { /* 直連失敗（CORS 或超時），走代理 */ }
+
   const res = await _fetchViaProxy(url);
   return { ok: res.ok, status: res.status, text: await res.text(), url };
 }
@@ -507,6 +516,26 @@ function removeRow(id) {
   cmdRows = cmdRows.filter(r => r.id !== id);
   if (!cmdRows.length) addRow();
   else _renderTable();
+}
+
+// 清除所有欄位資料（帳號/ID + 數值），保留行數
+function clearAllData() {
+  cmdRows.forEach(row => {
+    row.account = '';
+    row.value = null;
+    row.value2 = undefined;
+    row.valueB = '';
+    row.actionIdx = 0;
+    row.actionIdx2 = -1;
+    row.fieldValues = {};
+  });
+  _renderTable();
+  // 清除行狀態
+  cmdRows.forEach(row => {
+    const rowEl = document.getElementById('row-' + row.id);
+    if (rowEl) rowEl.classList.remove('row-ok', 'row-err');
+  });
+  toast('🧹 已清除所有欄位資料', 'info');
 }
 
 function duplicateRow(id) {
@@ -572,19 +601,23 @@ function onActionChange(id) {
   }
 }
 
-// 生成數值欄位 HTML
+// 生成數值欄位 HTML（預設不填寫，placeholder 顯示預設值）
 function _buildValHtml(action, row) {
   if (action.noVal) return `<span class="no-val-tag">無需數值</span>`;
   if (action.multiVal && action.fields) {
     const fv = row.fieldValues || {};
-    return `<div style="display:flex;gap:6px">${action.fields.map(f =>
-      `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.lbl}</div><input class="fi row-val" type="number" id="mf-${f.k}-${row.id}" value="${fv[f.k] !== undefined ? fv[f.k] : f.def}" placeholder="${f.lbl}" title="${f.lbl}" style="width:100%"></div>`
-    ).join('')}</div>`;
+    return `<div style="display:flex;gap:6px">${action.fields.map(f => {
+      const hasVal = fv[f.k] !== undefined && fv[f.k] !== '';
+      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" id="mf-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
+    }).join('')}</div>`;
   }
   if (action.dualVal) {
-    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" id="val-${row.id}" value="${row.value !== null ? row.value : action.def}" placeholder="${action.vLabel}" title="${action.vLabel}" style="flex:1"><input class="fi row-val" type="number" id="val2-${row.id}" value="${row.value2 !== undefined ? row.value2 : action.def2}" placeholder="${action.vLabel2}" title="${action.vLabel2}" style="flex:1"></div>`;
+    const hasV1 = row.value !== null && row.value !== '' && row.value !== undefined;
+    const hasV2 = row.value2 !== undefined && row.value2 !== '' && row.value2 !== null;
+    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" id="val-${row.id}" value="${hasV1 ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" id="val2-${row.id}" value="${hasV2 ? row.value2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
   }
-  return `<input class="fi row-val" type="number" id="val-${row.id}" value="${row.value !== null ? row.value : action.def}" placeholder="${action.vLabel}" title="${action.vLabel}">`;
+  const hasVal = row.value !== null && row.value !== '' && row.value !== undefined;
+  return `<input class="fi row-val" type="number" id="val-${row.id}" value="${hasVal ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）">`;
 }
 
 // 操作B 數值欄位 HTML
@@ -594,8 +627,8 @@ function _buildValBHtml(act2Idx, row) {
   const action2 = actions[act2Idx];
   if (!action2) return '';
   if (action2.noVal) return `<span class="no-val-tag">無需數值</span>`;
-  const curVal = row.valueB !== undefined && row.valueB !== '' ? row.valueB : action2.def;
-  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${curVal}" placeholder="${action2.vLabel || '數值'}" title="${action2.vLabel || '數值'}" style="width:100%">`;
+  const hasVal = row.valueB !== undefined && row.valueB !== '';
+  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${hasVal ? row.valueB : ''}" placeholder="${action2.def || '數值'}" title="${action2.vLabel || '數值'}（預設：${action2.def || ''}）" style="width:100%">`;
 }
 
 function onAction2Change(id) {
@@ -849,6 +882,7 @@ function renderApp() {
           <button class="tb-btn" onclick="addRow()">➕ 新增一行</button>
           <button class="tb-btn" onclick="batchAddAccounts()">📋 批次貼上帳號</button>
           <button class="tb-btn" onclick="applyToAll()">🔄 套用第一行設定到全部</button>
+          <button class="tb-btn" onclick="clearAllData()" style="margin-left:auto;color:#ff6b6b">🧹 清除資料</button>
         </div>
         <div class="table-wrap">
           <table class="cmd-table">
