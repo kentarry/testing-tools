@@ -832,7 +832,7 @@ async function execSubmit() {
       const fv = row.fieldValues || {};
       const fieldObj = {};
       action.fields.forEach(f => {
-        if (f.type === 'text') fieldObj[f.k] = fv[f.k] !== undefined ? String(fv[f.k]) : String(f.def);
+        if (f.type === 'text') fieldObj[f.k] = (fv[f.k] !== undefined && fv[f.k] !== '') ? String(fv[f.k]) : String(f.def);
         else fieldObj[f.k] = parseInt(fv[f.k], 10) || f.def;
       });
       params = action.mapFn(row.account, fieldObj);
@@ -867,7 +867,7 @@ async function execSubmit() {
           const fvB = row.fieldValuesB || {};
           const fieldObjB = {};
           action2.fields.forEach(f => {
-            if (f.type === 'text') fieldObjB[f.k] = fvB[f.k] !== undefined ? String(fvB[f.k]) : String(f.def);
+            if (f.type === 'text') fieldObjB[f.k] = (fvB[f.k] !== undefined && fvB[f.k] !== '') ? String(fvB[f.k]) : String(f.def);
             else fieldObjB[f.k] = parseInt(fvB[f.k], 10) || f.def;
           });
           params2 = action2.mapFn(row.account, fieldObjB);
