@@ -53,9 +53,21 @@ const GAME_ACTIONS = {
   ],
   vf: [
     // ── 基本設定 ──
-    { id: 'vf_money', ep: '/Test_ModifyMoney', icon: '💰', label: '修改財產', vLabel: '金額', def: 100000, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, currencyType: 66, amount: String(v) }) },
-    { id: 'vf_vip', ep: '/Test_ModifyVipInfo', icon: '👑', label: '修改VIP', vLabel: 'VIP等級', def: 5, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, vipLv: v }) },
-    { id: 'vf_level', ep: '/Test_ModifyLevelInfo', icon: '📊', label: '修改等級', vLabel: '等級', def: 10, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, Level: v, exp: '0', PercentOfExp: 0 }) },
+    {
+      id: 'vf_money', ep: '/Test_ModifyMoney', icon: '💰', label: '修改財產',
+      fields: [{ k: 'currencyType', lbl: '幣別(66=金幣)', def: 66 }, { k: 'amount', lbl: '數量', def: '100000', type: 'text' }],
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, currencyType: parseInt(f.currencyType, 10) || 66, amount: String(f.amount) })
+    },
+    {
+      id: 'vf_vip', ep: '/Test_ModifyVipInfo', icon: '👑', label: '修改VIP',
+      fields: [{ k: 'vipLv', lbl: 'VIP等級', def: 5 }, { k: 'vipExp', lbl: 'VIP經驗值', def: 0 }],
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, vipLv: parseInt(f.vipLv, 10) || 0, vipExp: parseInt(f.vipExp, 10) || 0 })
+    },
+    {
+      id: 'vf_level', ep: '/Test_ModifyLevelInfo', icon: '📊', label: '修改等級',
+      fields: [{ k: 'Level', lbl: '等級', def: 10 }, { k: 'exp', lbl: '經驗值', def: '0', type: 'text' }, { k: 'PercentOfExp', lbl: '經驗%', def: 0 }],
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, Level: parseInt(f.Level, 10) || 1, exp: String(f.exp || '0'), PercentOfExp: parseInt(f.PercentOfExp, 10) || 0 })
+    },
     {
       id: 'vf_bolt', ep: '/Test_ModifyBoltPower', icon: '⚡', label: 'BoltPower + 清賓果', vLabel: '數值', def: 100,
       chainEps: ['/Test_Bingo_ClearPlayerData'],
@@ -69,10 +81,24 @@ const GAME_ACTIONS = {
     },
     {
       id: 'vf_godsend', ep: '/Test_GodSend_GiveReward', icon: '🎉', label: '天降好禮',
-      fields: [{ k: 'singlePrizeCode', lbl: 'Prize Code', def: '00060066', type: 'text' }, { k: 'singlePrizeAmount', lbl: '數量', def: 100, type: 'text' }],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: 0 })
+      fields: [
+        { k: 'singlePrizeCode', lbl: 'Prize Code', def: '00060066', type: 'text' },
+        { k: 'singlePrizeAmount', lbl: '數量', def: '100', type: 'text' },
+        { k: 'style', lbl: '樣式(0一般/1登入/2升級/3儲值)', def: 0 },
+        { k: 'gainEndTime', lbl: '領取期限', def: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 19).replace('T', ' '), type: 'text' }
+      ],
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: parseInt(f.style, 10) || 0, gainEndTime: f.gainEndTime })
     },
-    { id: 'vf_inbox', ep: '/Test_Inbox_InsertMail', icon: '📬', label: 'Inbox塞信件', vLabel: '信件類型', def: 5, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, mailType: v }) },
+    {
+      id: 'vf_inbox', ep: '/Test_Inbox_InsertMail', icon: '📬', label: 'Inbox塞信件',
+      fields: [
+        { k: 'mailType', lbl: '類型(5系統/20儲值/21其他)', def: 5 },
+        { k: 'endTime', lbl: '截止時間', def: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 19).replace('T', ' '), type: 'text' },
+        { k: 'prizeCode', lbl: 'Prize Code', def: '00060066', type: 'text' },
+        { k: 'amount', lbl: '獎項數量', def: '1000', type: 'text' }
+      ],
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, mailType: parseInt(f.mailType, 10) || 5, endTime: f.endTime, prizeCode: f.prizeCode, amount: String(f.amount) })
+    },
     // ── 儲值 ──
     {
       id: 'vf_deposit', ep: '/Test_Add_UserStoredValueRecord', icon: '💳', label: '新增儲值紀錄',
