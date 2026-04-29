@@ -20,6 +20,16 @@ let selectedGame = null;
 let cmdRows = []; // {id, account, actionIdx, actionIdx2, value}
 let rowIdCounter = 0;
 
+// ── VF datetime helper ──
+// VF Go API 要求 datetime 必須：① JSON 引號包裹 ② 格式 "YYYY-MM-DD HH:MM:SS"
+// 使用者可能只輸入日期 (2099-12-23)，需自動補 00:00:00
+function _vfDt(v) {
+  let s = String(v || '').trim().replace('T', ' ');
+  // 只有日期沒有時間 → 補 00:00:00
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += ' 00:00:00';
+  return '"' + s + '"';
+}
+
 // ── Actions per game (ep = endpoint, 直接寫死不需查表) ──
 const GAME_ACTIONS = {
   aio: [
@@ -52,6 +62,8 @@ const GAME_ACTIONS = {
     { id: 'tmd_score', ep: '/ScoreboardAssignScore', icon: '🏆', label: '排行榜', vLabel: '分數', def: 10000, mapFn: (a, v) => ({ id: 1, account: a, score: v }) },
   ],
   vf: [
+    // VF datetime 需 JSON 引號包裹且格式必須為 "YYYY-MM-DD HH:MM:SS"
+    // _vfDt: 自動補時間 + 加引號
     // ── 基本設定 ──
     {
       id: 'vf_money', ep: '/Test_ModifyMoney', icon: '💰', label: '修改財產',
@@ -87,7 +99,7 @@ const GAME_ACTIONS = {
         { k: 'style', lbl: '樣式(0一般/1登入/2升級/3儲值)', def: 0 },
         { k: 'gainEndTime', lbl: '領取期限', def: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 19).replace('T', ' '), type: 'text' }
       ],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: parseInt(f.style, 10) || 0, gainEndTime: '"' + f.gainEndTime + '"' })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, rewardGroupId: 0, singlePrizeCode: f.singlePrizeCode, singlePrizeAmount: String(f.singlePrizeAmount), levelExtraType: 0, vipExtraType: 0, style: parseInt(f.style, 10) || 0, gainEndTime: _vfDt(f.gainEndTime) })
     },
     {
       id: 'vf_inbox', ep: '/Test_Inbox_InsertMail', icon: '📬', label: 'Inbox塞信件',
@@ -97,13 +109,13 @@ const GAME_ACTIONS = {
         { k: 'prizeCode', lbl: 'Prize Code', def: '00060066', type: 'text' },
         { k: 'amount', lbl: '獎項數量', def: '1000', type: 'text' }
       ],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, mailType: parseInt(f.mailType, 10) || 5, endTime: '"' + f.endTime + '"', prizeCode: f.prizeCode, amount: String(f.amount) })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, mailType: parseInt(f.mailType, 10) || 5, endTime: _vfDt(f.endTime), prizeCode: f.prizeCode, amount: String(f.amount) })
     },
     // ── 儲值 ──
     {
       id: 'vf_deposit', ep: '/Test_Add_UserStoredValueRecord', icon: '💳', label: '新增儲值紀錄',
       fields: [{ k: 'price', lbl: '金額(USD)', def: 4.99 }, { k: 'time', lbl: '時間', def: new Date().toISOString().slice(0, 19).replace('T', ' '), type: 'text' }],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, price: f.price, time: '"' + f.time + '"' })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, price: f.price, time: _vfDt(f.time) })
     },
     { id: 'vf_delDeposit', ep: '/Test_Delete_UserStoredValueRecord', icon: '🗑️', label: '刪除儲值紀錄', vLabel: '近N日(-1全刪)', def: -1, mapFn: (a, v) => ({ accountId: parseInt(a, 10) || 0, days: v }) },
     // ── Battle Pass ──
@@ -138,7 +150,7 @@ const GAME_ACTIONS = {
     {
       id: 'vf_createTime', ep: '/Test_ModifyAccountCreateTime', icon: '🕐', label: '修改建立時間',
       fields: [{ k: 'accountCreateTime', lbl: '時間(YYYY-MM-DD HH:MM:SS)', def: new Date().toISOString().slice(0, 19).replace('T', ' '), type: 'text' }],
-      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, accountCreateTime: '"' + f.accountCreateTime + '"' })
+      multiVal: true, mapFn: (a, f) => ({ accountId: parseInt(a, 10) || 0, accountCreateTime: _vfDt(f.accountCreateTime) })
     },
     {
       id: 'vf_region', ep: '/Test_ModifyAccountRegisterAreaCode', icon: '🌍', label: '修改註冊地區',
