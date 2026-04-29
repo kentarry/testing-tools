@@ -1,0 +1,33 @@
+# ═══════════════════════════════════════════════
+# AI 自動改財產 — 批量指令範例檔
+# 用法: node ai_cli.js --batch commands_example.txt
+# ═══════════════════════════════════════════════
+# 每行一個指令, # 開頭為註解
+# 格式: <platform> <account> <action> [value] [extra]
+# 或者: skill <skillName> <account> [value]
+#
+# 📌 多帳號語法:
+#   逗號分隔: ray1,ray2,ray3
+#   範圍語法: ray1~7  (展開為 ray1, ray2, ..., ray7)
+#   混合:     ray1~3,ray10,ray15
+
+# ── 明星3缺1 (AIO) 單帳號 ──
+aio ray15 money 500000
+aio ray15 diamond 100000
+aio ray15 vip 8
+
+# ── 明星3缺1 (AIO) 多帳號 ──
+aio ray1~7 money 500000
+aio ray1~7 vip 8
+
+# ── 滿貫大亨 (TMD) ──
+tmd ray1,ray2,ray3 money 200000
+tmd ray1~3 vip 5
+
+# ── Vegas Frenzy (VF) ──
+# vf 163436 money 100000
+# vf 163436 vip 3
+
+# ── 使用技能 (多帳號) ──
+# skill aio-rich ray1~7
+# skill tmd-rich ray1,ray2,ray3

@@ -1,0 +1,14 @@
+# 可用新的多帳號語法簡化：
+# 舊寫法 (每行一個):
+# aio ray1 vip 0
+# aio ray2 vip 1
+# ...
+
+# 新寫法 — 同 VIP 等級的帳號可合併:
+aio ray1 vip 0
+aio ray2 vip 1
+aio ray3 vip 2
+aio ray4 vip 3
+aio ray5 vip 4
+aio ray6 vip 5
+aio ray7 vip 6
