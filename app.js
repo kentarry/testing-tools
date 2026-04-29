@@ -522,9 +522,11 @@ function _syncRowFromDom(id) {
   const accEl = document.getElementById('acc-' + id);
   const actEl = document.getElementById('act-' + id);
   const act2El = document.getElementById('act2-' + id);
+  const valBEl = document.getElementById('valB-' + id);
   if (accEl) row.account = accEl.value.trim();
   if (actEl) row.actionIdx = parseInt(actEl.value, 10);
   if (act2El) row.actionIdx2 = parseInt(act2El.value, 10);
+  if (valBEl) row.valueB = valBEl.value;
   // multiVal: sync each field
   if (selectedGame) {
     const action = GAME_ACTIONS[selectedGame][row.actionIdx];
@@ -562,6 +564,12 @@ function onActionChange(id) {
   // Re-render just the value cell
   const valCell = document.getElementById('valcell-' + id);
   if (valCell) valCell.innerHTML = _buildValHtml(action, row);
+  // 同步更新操作B的數值欄
+  const valBCell = document.getElementById('valBcell-' + id);
+  if (valBCell) {
+    const act2Idx = row.actionIdx2 !== undefined ? row.actionIdx2 : -1;
+    valBCell.innerHTML = _buildValBHtml(act2Idx, row);
+  }
 }
 
 // 生成數值欄位 HTML
@@ -579,6 +587,34 @@ function _buildValHtml(action, row) {
   return `<input class="fi row-val" type="number" id="val-${row.id}" value="${row.value !== null ? row.value : action.def}" placeholder="${action.vLabel}" title="${action.vLabel}">`;
 }
 
+// 操作B 數值欄位 HTML
+function _buildValBHtml(act2Idx, row) {
+  if (!selectedGame || act2Idx < 0) return '';
+  const actions = GAME_ACTIONS[selectedGame];
+  const action2 = actions[act2Idx];
+  if (!action2) return '';
+  if (action2.noVal) return `<span class="no-val-tag">無需數值</span>`;
+  const curVal = row.valueB !== undefined && row.valueB !== '' ? row.valueB : action2.def;
+  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${curVal}" placeholder="${action2.vLabel || '數值'}" title="${action2.vLabel || '數值'}" style="width:100%">`;
+}
+
+function onAction2Change(id) {
+  _syncRowFromDom(id);
+  const row = cmdRows.find(r => r.id === id);
+  if (!row || !selectedGame) return;
+  const actions = GAME_ACTIONS[selectedGame];
+  const act2Idx = row.actionIdx2;
+  // 重設 valueB
+  if (act2Idx >= 0 && actions[act2Idx]) {
+    const action2 = actions[act2Idx];
+    row.valueB = action2.noVal ? '' : String(action2.def || '');
+  } else {
+    row.valueB = '';
+  }
+  const valBCell = document.getElementById('valBcell-' + id);
+  if (valBCell) valBCell.innerHTML = _buildValBHtml(act2Idx, row);
+}
+
 function _renderTable() {
   if (!selectedGame) return;
   const actions = GAME_ACTIONS[selectedGame];
@@ -594,10 +630,13 @@ function _renderTable() {
         ${actions.map((a, i) => `<option value="${i}" ${i === row.actionIdx ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
       </select></td>
       <td id="valcell-${row.id}">${_buildValHtml(action, row)}</td>
-      <td><select class="fi row-act row-act2" id="act2-${row.id}" title="操作B（可選，預設無）">
-        <option value="-1" ${act2Val === -1 ? 'selected' : ''}>— 無 —</option>
-        ${actions.map((a, i) => `<option value="${i}" ${i === act2Val ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
-      </select></td>
+      <td><div style="display:flex;flex-direction:column;gap:4px">
+        <select class="fi row-act row-act2" id="act2-${row.id}" onchange="onAction2Change(${row.id})" title="操作B（可選，預設無）">
+          <option value="-1" ${act2Val === -1 ? 'selected' : ''}>— 無 —</option>
+          ${actions.map((a, i) => `<option value="${i}" ${i === act2Val ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
+        </select>
+        <div id="valBcell-${row.id}">${_buildValBHtml(act2Val, row)}</div>
+      </div></td>
       <td class="row-actions">
         <button class="row-btn row-btn-dup" onclick="duplicateRow(${row.id})" title="複製此行">📋</button>
         <button class="row-btn row-btn-del" onclick="removeRow(${row.id})" title="刪除此行">✕</button>
@@ -727,7 +766,8 @@ async function execSubmit() {
         if (action2.noVal) {
           params2 = action2.mapFn(row.account, null);
         } else {
-          params2 = action2.mapFn(row.account, action2.def);
+          const valB = (row.valueB !== undefined && row.valueB !== '') ? (parseInt(row.valueB, 10) || action2.def) : action2.def;
+          params2 = action2.mapFn(row.account, valB);
         }
         try {
           const r2 = await _execApi(platform.base, action2.ep, params2);
