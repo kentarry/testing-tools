@@ -630,13 +630,13 @@ function _renderTable() {
         ${actions.map((a, i) => `<option value="${i}" ${i === row.actionIdx ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
       </select></td>
       <td id="valcell-${row.id}">${_buildValHtml(action, row)}</td>
-      <td><div style="display:flex;flex-direction:column;gap:4px">
+      <td>
         <select class="fi row-act row-act2" id="act2-${row.id}" onchange="onAction2Change(${row.id})" title="操作B（可選，預設無）">
           <option value="-1" ${act2Val === -1 ? 'selected' : ''}>— 無 —</option>
           ${actions.map((a, i) => `<option value="${i}" ${i === act2Val ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
         </select>
-        <div id="valBcell-${row.id}">${_buildValBHtml(act2Val, row)}</div>
-      </div></td>
+      </td>
+      <td id="valBcell-${row.id}">${_buildValBHtml(act2Val, row)}</td>
       <td class="row-actions">
         <button class="row-btn row-btn-dup" onclick="duplicateRow(${row.id})" title="複製此行">📋</button>
         <button class="row-btn row-btn-del" onclick="removeRow(${row.id})" title="刪除此行">✕</button>
@@ -852,7 +852,7 @@ function renderApp() {
         </div>
         <div class="table-wrap">
           <table class="cmd-table">
-            <thead><tr><th id="thAccount">帳號</th><th>操作A</th><th>數值</th><th>操作B（選填）</th><th style="width:70px"></th></tr></thead>
+            <thead><tr><th id="thAccount">帳號</th><th>操作A</th><th>數值</th><th>操作B（選填）</th><th>B數值</th><th style="width:70px"></th></tr></thead>
             <tbody id="cmdTbody"></tbody>
           </table>
         </div>
