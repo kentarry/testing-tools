@@ -69,16 +69,39 @@ const PLATFORMS = {
     actions: {
       money:    { ep: '/Test_ModifyMoney',       map: (a, v) => ({ accountId: parseInt(a, 10), currencyType: 66, amount: String(v ?? 100000) }) },
       vip:      { ep: '/Test_ModifyVipInfo',     map: (a, v) => ({ accountId: parseInt(a, 10), vipLv: v ?? 5 }) },
-      level:    { ep: '/Test_ModifyLevelInfo',   map: (a, v) => ({ accountId: parseInt(a, 10), Level: v ?? 10 }) },
-      bolt:     { ep: '/Test_ModifyBoltPower',   map: (a, v) => ({ accountId: parseInt(a, 10), boltPower: v ?? 100 }) },
+      level:    { ep: '/Test_ModifyLevelInfo',   map: (a, v) => ({ accountId: parseInt(a, 10), Level: v ?? 10, exp: '0', PercentOfExp: 0 }) },
+      bolt:     { ep: '/Test_ModifyBoltPower',   map: (a, v) => ({ accountId: parseInt(a, 10), boltPower: v ?? 100 }),
+                  chain: [{ ep: '/Test_Bingo_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) }] },
       item:     { ep: '/Test_GoldItem_ModifyPlayerData', map: (a, v, extra) => ({ accountId: parseInt(a, 10), prizeCode: v ?? '00060066', modifyAmount: extra ?? 1 }) },
       godsend:  { ep: '/Test_GodSend_GiveReward', map: (a, v) => ({ accountId: parseInt(a, 10), rewardGroupId: 0, singlePrizeCode: v ?? '00060066', singlePrizeAmount: '100' }) },
       inbox:    { ep: '/Test_Inbox_InsertMail',  map: (a) => ({ accountId: parseInt(a, 10), mailType: 5 }) },
-      attend:   { ep: '/Test_AttendBook_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      deposit:  { ep: '/Test_Add_UserStoredValueRecord', map: (a, v) => ({ accountId: parseInt(a, 10), price: v ?? 4.99, time: new Date().toISOString().slice(0,19).replace('T',' ') }) },
+      deldeposit: { ep: '/Test_Delete_UserStoredValueRecord', map: (a, v) => ({ accountId: parseInt(a, 10), days: v ?? -1 }) },
       bpreset:  { ep: '/Test_BattlePass_PlayerReset', map: (a) => ({ accountId: parseInt(a, 10) }) },
-      ad:       { ep: '/Test_AD_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10), adType: 0 }) },
+      bpv2reset:{ ep: '/Test_BattlePassV2_PlayerReset', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      bptype:   { ep: '/Test_BattlePass_SetPlayerPassType', map: (a, v) => ({ accountId: parseInt(a, 10), passType: v ?? 1 }) },
+      bingo:    { ep: '/Test_Bingo_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      attend:   { ep: '/Test_AttendBook_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      mission:  { ep: '/Test_Mission_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      quest:    { ep: '/Test_QuestGame_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      eventmission: { ep: '/Test_EventMission_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
       tag:      { ep: '/Test_UserTag_Clear',     map: (a) => ({ accountId: parseInt(a, 10) }) },
       email:    { ep: '/Test_ClearProfileDataEmail', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      ad:       { ep: '/Test_AD_ClearPlayerData', map: (a, v) => ({ accountId: parseInt(a, 10), adType: v ?? 0 }) },
+      offline:  { ep: '/Test_OfflineBonus_ClearPlayerData', map: (a, v) => ({ accountId: parseInt(a, 10), offlineBonusType: v ?? 0 }) },
+      offlinemul: { ep: '/Test_OfflineBonus_ClearPlayerMultipleData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      piggy:    { ep: '/Test_PiggyBank_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      couponact:{ ep: '/Test_Coupon_ClearPlayerActivity', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      couponown:{ ep: '/Test_Coupon_ClearPlayerCoupon', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      credential: { ep: '/Test_Credential_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      liveops:  { ep: '/Test_LiveOps_ClearUserActivity', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      luckytrip:{ ep: '/Test_LuckyTrip_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      specialsign: { ep: '/Test_SpecialSignIn_ClearPlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      groupprize: { ep: '/Test_Clear_Player_GroupingPrizeData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      albumall: { ep: '/Test_JourneyAlbum_AllDeletePlayerData', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      albummission: { ep: '/Test_JourneyAlbum_DeletePlayerMission', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      albumfree:{ ep: '/Test_JourneyAlbum_ReTakeFreePack', map: (a) => ({ accountId: parseInt(a, 10) }) },
+      dropitem: { ep: '/Test_DropItems_FastDrop', map: (a) => ({ accountId: parseInt(a, 10) }) },
     }
   }
 };
@@ -308,6 +331,28 @@ async function runCommandSingle(platformId, account, actionId, value, extra, opt
     if (opts.verbose && result.body) {
       const trimmed = result.body.substring(0, 200).trim();
       console.log(`     📄 ${trimmed}`);
+    }
+
+    // Execute chained actions (e.g., bolt → bingo clear)
+    if (result.ok && action.chain && action.chain.length) {
+      for (const chainAction of action.chain) {
+        const chainParams = chainAction.map(account);
+        if (!opts.quiet) {
+          process.stdout.write(`  🔗 連鎖: ${chainAction.ep} ... `);
+        }
+        try {
+          let chainResult;
+          if (opts.useProxy) {
+            chainResult = await execApi(platform.base, chainAction.ep, chainParams);
+          } else {
+            try { chainResult = await execApiDirect(platform.base, chainAction.ep, chainParams); }
+            catch { chainResult = await execApi(platform.base, chainAction.ep, chainParams); }
+          }
+          if (!opts.quiet) console.log(chainResult.ok ? '✅' : `❌ HTTP ${chainResult.status}`);
+        } catch (ce) {
+          if (!opts.quiet) console.log(`❌ ${ce.message}`);
+        }
+      }
     }
 
     return result.ok;

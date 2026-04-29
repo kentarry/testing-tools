@@ -48,10 +48,67 @@ const GAME_ACTIONS = {
     { id:'tmd_score',      ep:'/ScoreboardAssignScore', icon:'🏆', label:'排行榜', vLabel:'分數', def:10000, mapFn:(a,v)=>({id:1,account:a,score:v}) },
   ],
   vf: [
+    // ── 基本設定 ──
     { id:'vf_money', ep:'/Test_ModifyMoney',     icon:'💰', label:'修改財產',    vLabel:'金額',     def:100000, mapFn:(a,v)=>({accountId:parseInt(a,10)||0,currencyType:66,amount:String(v)}) },
     { id:'vf_vip',   ep:'/Test_ModifyVipInfo',   icon:'👑', label:'修改VIP',     vLabel:'VIP等級',  def:5,      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,vipLv:v}) },
-    { id:'vf_level', ep:'/Test_ModifyLevelInfo', icon:'📊', label:'修改等級',    vLabel:'等級',     def:10,     mapFn:(a,v)=>({accountId:parseInt(a,10)||0,Level:v}) },
-    { id:'vf_bolt',  ep:'/Test_ModifyBoltPower', icon:'⚡', label:'BoltPower',   vLabel:'數值',     def:100,    mapFn:(a,v)=>({accountId:parseInt(a,10)||0,boltPower:v}) },
+    { id:'vf_level', ep:'/Test_ModifyLevelInfo', icon:'📊', label:'修改等級',    vLabel:'等級',     def:10,     mapFn:(a,v)=>({accountId:parseInt(a,10)||0,Level:v,exp:'0',PercentOfExp:0}) },
+    { id:'vf_bolt',  ep:'/Test_ModifyBoltPower', icon:'⚡', label:'BoltPower + 清賓果', vLabel:'數值', def:100,
+      chainEps:['/Test_Bingo_ClearPlayerData'],
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,boltPower:v}) },
+    // ── 道具 / 天降好禮 ──
+    { id:'vf_item',  ep:'/Test_GoldItem_ModifyPlayerData', icon:'🎁', label:'修改道具',
+      fields:[{k:'prizeCode',lbl:'Prize Code',def:'00060066',type:'text'},{k:'modifyAmount',lbl:'增減數量',def:1},{k:'absoluteAmount',lbl:'絕對數量(0=不用)',def:0}],
+      multiVal:true, mapFn:(a,f)=>({accountId:parseInt(a,10)||0,prizeCode:f.prizeCode,modifyAmount:f.modifyAmount,absoluteAmount:f.absoluteAmount}) },
+    { id:'vf_godsend', ep:'/Test_GodSend_GiveReward', icon:'🎉', label:'天降好禮',
+      fields:[{k:'singlePrizeCode',lbl:'Prize Code',def:'00060066',type:'text'},{k:'singlePrizeAmount',lbl:'數量',def:100,type:'text'}],
+      multiVal:true, mapFn:(a,f)=>({accountId:parseInt(a,10)||0,rewardGroupId:0,singlePrizeCode:f.singlePrizeCode,singlePrizeAmount:String(f.singlePrizeAmount),levelExtraType:0,vipExtraType:0,style:0}) },
+    { id:'vf_inbox', ep:'/Test_Inbox_InsertMail', icon:'📬', label:'Inbox塞信件', vLabel:'信件類型', def:5,
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,mailType:v}) },
+    // ── 儲值 ──
+    { id:'vf_deposit', ep:'/Test_Add_UserStoredValueRecord', icon:'💳', label:'新增儲值紀錄',
+      fields:[{k:'price',lbl:'金額(USD)',def:4.99},{k:'time',lbl:'時間',def:new Date().toISOString().slice(0,19).replace('T',' '),type:'text'}],
+      multiVal:true, mapFn:(a,f)=>({accountId:parseInt(a,10)||0,price:f.price,time:f.time}) },
+    { id:'vf_delDeposit', ep:'/Test_Delete_UserStoredValueRecord', icon:'🗑️', label:'刪除儲值紀錄', vLabel:'近N日(-1全刪)', def:-1,
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,days:v}) },
+    // ── Battle Pass ──
+    { id:'vf_bpReset',  ep:'/Test_BattlePass_PlayerReset',  icon:'🏅', label:'重置BP',       vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_bpV2Reset', ep:'/Test_BattlePassV2_PlayerReset', icon:'🏅', label:'重置BP v2',   vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_bpType',   ep:'/Test_BattlePass_SetPlayerPassType', icon:'🎫', label:'設定BP類型', vLabel:'Pass Type', def:1,
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,passType:v}) },
+    // ── 清除資料 ──
+    { id:'vf_bingo',    ep:'/Test_Bingo_ClearPlayerData',          icon:'🎱', label:'清除賓果',     vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_attend',   ep:'/Test_AttendBook_ClearPlayerData',     icon:'📅', label:'清除簽到簿',   vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_mission',  ep:'/Test_Mission_ClearPlayerData',        icon:'📋', label:'清除大廳任務', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_quest',    ep:'/Test_QuestGame_ClearPlayerData',      icon:'🎯', label:'清除遊戲任務', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_eventMission', ep:'/Test_EventMission_ClearPlayerData', icon:'📝', label:'清除單頁任務', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_tag',      ep:'/Test_UserTag_Clear',                  icon:'🏷️', label:'清空標籤',     vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_email',    ep:'/Test_ClearProfileDataEmail',          icon:'📧', label:'清除Email',    vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_ad',       ep:'/Test_AD_ClearPlayerData',             icon:'📺', label:'清除廣告資料', vLabel:'類型(0=全部)', def:0,
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,adType:v}) },
+    { id:'vf_offline',  ep:'/Test_OfflineBonus_ClearPlayerData',   icon:'🌙', label:'清除離線獎勵', vLabel:'類型(0=全部)', def:0,
+      mapFn:(a,v)=>({accountId:parseInt(a,10)||0,offlineBonusType:v}) },
+    { id:'vf_offlineMul', ep:'/Test_OfflineBonus_ClearPlayerMultipleData', icon:'✖️', label:'清除離線倍率', vLabel:null, noVal:true,
+      mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_piggy',    ep:'/Test_PiggyBank_ClearPlayerData',      icon:'🐷', label:'清除小豬撲滿', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_couponAct', ep:'/Test_Coupon_ClearPlayerActivity',    icon:'🎟️', label:'清除優惠券活動', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_couponOwn', ep:'/Test_Coupon_ClearPlayerCoupon',      icon:'🎫', label:'清除持有優惠券', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_credential', ep:'/Test_Credential_ClearPlayerData',   icon:'🔑', label:'清除資格資料', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_liveops', ep:'/Test_LiveOps_ClearUserActivity',       icon:'📡', label:'清除LiveOps',  vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_luckyTrip', ep:'/Test_LuckyTrip_ClearPlayerData',     icon:'🎰', label:'清除連續禮包', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_specialSign', ep:'/Test_SpecialSignIn_ClearPlayerData', icon:'📆', label:'清除七日簽',   vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_groupPrize', ep:'/Test_Clear_Player_GroupingPrizeData', icon:'🎁', label:'清除分群禮包', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    // ── 卡冊 ──
+    { id:'vf_albumAll', ep:'/Test_JourneyAlbum_AllDeletePlayerData', icon:'📕', label:'刪除卡冊全部', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_albumMission', ep:'/Test_JourneyAlbum_DeletePlayerMission', icon:'📗', label:'刪除卡冊任務', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_albumFree', ep:'/Test_JourneyAlbum_ReTakeFreePack', icon:'📘', label:'重領免費卡包', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    // ── 其他 ──
+    { id:'vf_dropItem', ep:'/Test_DropItems_FastDrop', icon:'💧', label:'快速掉落', vLabel:null, noVal:true, mapFn:(a)=>({accountId:parseInt(a,10)||0}) },
+    { id:'vf_createTime', ep:'/Test_ModifyAccountCreateTime', icon:'🕐', label:'修改建立時間',
+      fields:[{k:'accountCreateTime',lbl:'時間(YYYY-MM-DD HH:MM:SS)',def:new Date().toISOString().slice(0,19).replace('T',' '),type:'text'}],
+      multiVal:true, mapFn:(a,f)=>({accountId:parseInt(a,10)||0,accountCreateTime:f.accountCreateTime}) },
+    { id:'vf_region', ep:'/Test_ModifyAccountRegisterAreaCode', icon:'🌍', label:'修改註冊地區',
+      fields:[{k:'accountRegisterAreaCode',lbl:'地區碼(如US)',def:'US',type:'text'}],
+      multiVal:true, mapFn:(a,f)=>({accountId:parseInt(a,10)||0,accountRegisterAreaCode:f.accountRegisterAreaCode}) },
   ],
 };
 
@@ -82,6 +139,19 @@ const NLP_RULES = [
   { game:'vf', kw:['vf','vegas','frenzy'], sub:['vip'], actionId:'vf_vip', extractVal:true },
   { game:'vf', kw:['vf','vegas','frenzy'], sub:['等級','level'], actionId:'vf_level', extractVal:true },
   { game:'vf', kw:['vf','vegas','frenzy'], sub:['bolt','boltpower'], actionId:'vf_bolt', extractVal:true },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['道具','item','golditem'], actionId:'vf_item', extractVal:true },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['天降','godsend'], actionId:'vf_godsend', extractVal:true },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['信件','inbox','mail'], actionId:'vf_inbox', extractVal:true },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['bp','battlepass','通行證'], actionId:'vf_bpReset', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['賓果','bingo'], actionId:'vf_bingo', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['簽到','attend','簽到簿'], actionId:'vf_attend', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['任務','mission'], actionId:'vf_mission', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['標籤','tag'], actionId:'vf_tag', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['儲值','deposit'], actionId:'vf_deposit', extractVal:true },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['小豬','piggy','撲滿'], actionId:'vf_piggy', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['卡冊','album'], actionId:'vf_albumAll', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['離線','offline'], actionId:'vf_offline', extractVal:false },
+  { game:'vf', kw:['vf','vegas','frenzy'], sub:['優惠券','coupon'], actionId:'vf_couponAct', extractVal:false },
 ];
 
 function _extractNumber(text) {
@@ -295,7 +365,20 @@ async function _execApi(base, ep, params) {
   if (params) Object.entries(params).forEach(([k,v]) => qs.append(k,v));
   const url = base + ep + (qs.toString() ? '?' + qs.toString() : '');
   const res = await _fetchViaProxy(url);
-  return {ok: res.ok, status: res.status, text: await res.text(), url};
+  const text = await res.text();
+  // VF API 回傳 200 但 body 可能含錯誤訊息，需雙重判斷
+  let ok = res.ok;
+  if (ok && text) {
+    const lower = text.toLowerCase();
+    // 若 body 含明確錯誤關鍵字，標記為失敗
+    if (lower.includes('error') && !lower.includes('成功') && !lower.includes('success')) ok = false;
+  }
+  // VF/TMD API 有時透過 proxy 回傳非 200，但 body 含成功訊息 → 修正為成功
+  if (!ok && text) {
+    const lower = text.toLowerCase();
+    if (lower.includes('成功') || lower.includes('success') || lower.includes('修改完成')) ok = true;
+  }
+  return {ok, status: res.status, text, url};
 }
 
 // ── Helpers ──
@@ -529,7 +612,10 @@ async function execSubmit(){
     if(action.multiVal&&action.fields){
       const fv=row.fieldValues||{};
       const fieldObj={};
-      action.fields.forEach(f=>fieldObj[f.k]=parseInt(fv[f.k],10)||f.def);
+      action.fields.forEach(f=>{
+        if(f.type==='text') fieldObj[f.k]=fv[f.k]!==undefined?String(fv[f.k]):String(f.def);
+        else fieldObj[f.k]=parseInt(fv[f.k],10)||f.def;
+      });
       params=action.mapFn(row.account,fieldObj);
     }else if(action.dualVal){
       const val=parseInt(row.value,10)||action.def;
@@ -541,7 +627,21 @@ async function execSubmit(){
     }
     try{
       const r=await _execApi(platform.base,action.ep,params);
-      return{account:row.account,action:action.label,ok:r.ok,status:r.status,text:r.text};
+      let chainResults=[];
+      // 執行 chainEps（例如 BoltPower 後自動清賓果）
+      if(action.chainEps&&action.chainEps.length){
+        const acctId=parseInt(row.account,10)||0;
+        chainResults=await Promise.all(action.chainEps.map(async cep=>{
+          try{
+            const cr=await _execApi(platform.base,cep,{accountId:acctId});
+            return{ep:cep,ok:cr.ok,text:cr.text};
+          }catch(e){return{ep:cep,ok:false,text:e.message};}
+        }));
+      }
+      const chainOk=chainResults.every(c=>c.ok);
+      const chainDetail=chainResults.map(c=>`${c.ok?'✅':'❌'} ${c.ep}`).join(', ');
+      return{account:row.account,action:action.label,ok:r.ok&&chainOk,status:r.status,
+        text:r.text+(chainResults.length?` | 連鎖: ${chainDetail}`:'')};
     }catch(e){return{account:row.account,action:action.label,ok:false,status:0,text:e.message};}
   }));
 
