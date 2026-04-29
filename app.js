@@ -17,7 +17,7 @@ const GAMES = {
   vf: { name: 'Vegas Frenzy', icon: '🎰', color: '#f472b6', platform: () => PLATFORM_VF, inputLabel: 'ID' },
 };
 let selectedGame = null;
-let cmdRows = []; // {id, account, actionIdx, value}
+let cmdRows = []; // {id, account, actionIdx, actionIdx2, value}
 let rowIdCounter = 0;
 
 // ── Actions per game (ep = endpoint, 直接寫死不需查表) ──
@@ -150,14 +150,24 @@ const NLP_RULES = [
   { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['錢', '金幣', 'money', '財產', 'gold', '金'], actionId: 'vf_money', extractVal: true },
   { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['vip'], actionId: 'vf_vip', extractVal: true },
   { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['等級', 'level'], actionId: 'vf_level', extractVal: true },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['bolt', 'boltpower'], actionId: 'vf_bolt', extractVal: true },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['賓果', 'bingo'], actionId: 'vf_bingo', extractVal: false },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['簽到', 'attend'], actionId: 'vf_attend', extractVal: false },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['任務', 'mission'], actionId: 'vf_mission', extractVal: false },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['bp', 'battlepass'], actionId: 'vf_bpReset', extractVal: false },
-  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['小豬', 'piggy'], actionId: 'vf_piggy', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['bolt', 'boltpower', '改bp'], actionId: 'vf_bolt', extractVal: true },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['賓果', 'bingo', '清賓果', '清除賓果'], actionId: 'vf_bingo', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['簽到', 'attend', '簽到簿'], actionId: 'vf_attend', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['大廳任務', 'mission'], actionId: 'vf_mission', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['遊戲任務', 'quest'], actionId: 'vf_quest', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['清bp', '重置bp', 'bp重置'], actionId: 'vf_bpReset', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['bp類型', 'bp type'], actionId: 'vf_bpType', extractVal: true },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['小豬', 'piggy', '撲滿'], actionId: 'vf_piggy', extractVal: false },
   { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['卡冊', 'album'], actionId: 'vf_albumAll', extractVal: false },
   { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['離線', 'offline'], actionId: 'vf_offline', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['廣告', 'ad'], actionId: 'vf_ad', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['優惠券', 'coupon'], actionId: 'vf_couponAct', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['七日簽', '七日'], actionId: 'vf_specialSign', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['liveops'], actionId: 'vf_liveops', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['標籤', 'tag'], actionId: 'vf_tag', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['email', '信箱'], actionId: 'vf_email', extractVal: false },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['儲值', 'deposit'], actionId: 'vf_deposit', extractVal: true },
+  { game: 'vf', kw: ['vf', 'vegas', 'frenzy'], sub: ['刪儲值', '刪除儲值'], actionId: 'vf_delDeposit', extractVal: true },
 ];
 
 function _extractNumber(text) {
@@ -165,30 +175,99 @@ function _extractNumber(text) {
   return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
 }
 
-// 從口語輸入解析出 [{game, actionId, account, value}]
-// 已選平台時不需打平台名，如「ray1 改金幣 500000」
-function _nlpParse(input) {
-  const lower = input.toLowerCase().trim();
-  const tokens = input.trim().split(/\s+/);
+// ── 拆分多步驟指令（先A再B、然後C） ──
+function _splitChainedInput(input) {
+  // 分割連接詞：先…再…、然後、接著、之後、並且
+  // 「163436 先清除賓果再改BP12」→ [「先清除賓果」, 「改BP12」]
+  return input.split(/[，,]|(?:然後|接著|之後|並且)|再(?=[改清設調修重刪])/).map(s => s.trim()).filter(Boolean);
+}
 
-  // 先嘗試帶平台名的完整匹配
-  for (const rule of NLP_RULES) {
-    if (rule.kw.some(k => lower.includes(k.toLowerCase())) && rule.sub.some(s => lower.includes(s.toLowerCase()))) {
-      return [_extractMatch(rule, tokens, input, false)];
+// 從口語輸入解析出 [{game, actionId, account, value}]
+// 支援多步驟：「163436 先清除賓果再改BP12」→ [{清除賓果}, {改BP 12}]
+function _nlpParse(input) {
+  const trimmed = input.trim();
+  // Step 1: 提取帳號/ID — 開頭的純數字或帳號名
+  let account = null;
+  let restInput = trimmed;
+  const leadMatch = trimmed.match(/^(\S+)\s+/);
+  if (leadMatch) {
+    const candidate = leadMatch[1];
+    // 去掉候選詞中可能的連接詞前綴（如「先」）
+    const cleanCandidate = candidate.replace(/^先/, '');
+    // 判斷是否為帳號：純數字(VF ID)、或不是操作關鍵字
+    const isActionKw = NLP_RULES.some(r => r.sub.some(s => cleanCandidate.toLowerCase().includes(s.toLowerCase())));
+    if (!isActionKw) {
+      account = candidate;
+      restInput = trimmed.slice(leadMatch[0].length);
     }
   }
-  // 若上方已選平台，只用 sub 關鍵字匹配（不需打平台名）
-  if (selectedGame) {
-    for (const rule of NLP_RULES.filter(r => r.game === selectedGame)) {
-      if (rule.sub.some(s => lower.includes(s.toLowerCase()))) {
-        return [_extractMatch(rule, tokens, input, true)];
+
+  // Step 2: 拆分多步驟
+  const segments = _splitChainedInput(restInput);
+  const results = [];
+  const gameScope = selectedGame || null;
+
+  for (const seg of segments) {
+    const segLower = seg.toLowerCase().replace(/^先/, '');
+    let matched = null;
+
+    // 嘗試帶平台名匹配
+    for (const rule of NLP_RULES) {
+      if (rule.kw.some(k => segLower.includes(k.toLowerCase())) && rule.sub.some(s => segLower.includes(s.toLowerCase()))) {
+        matched = rule; break;
+      }
+    }
+    // 若已選平台，只用 sub 匹配
+    if (!matched && gameScope) {
+      for (const rule of NLP_RULES.filter(r => r.game === gameScope)) {
+        if (rule.sub.some(s => segLower.includes(s.toLowerCase()))) {
+          matched = rule; break;
+        }
+      }
+    }
+    if (!matched) continue;
+
+    // 從此段落提取數值（排除帳號ID）
+    const segClean = seg.replace(/^先/, '');
+    const val = matched.extractVal ? _extractNumber(segClean) : null;
+
+    // 帳號：若尚未提取，嘗試從段落中找
+    let segAccount = account;
+    if (!segAccount) {
+      const tokens = seg.split(/\s+/);
+      for (const tk of tokens) {
+        const tkL = tk.toLowerCase();
+        const isKw = [...matched.kw, ...matched.sub].some(k => tkL.includes(k.toLowerCase()) || k.toLowerCase().includes(tkL));
+        if (isKw) continue;
+        if (['改', '設', '調', '加', '設定', '修改', '調整', '清除', '清', '先'].some(w => tkL === w)) continue;
+        segAccount = tk; break;
+      }
+    }
+
+    results.push({ game: matched.game, actionId: matched.actionId, account: segAccount, value: val });
+  }
+
+  // fallback: 原本的單一匹配邏輯（相容舊格式如「ray1 改金幣 500000」）
+  if (!results.length) {
+    const lower = trimmed.toLowerCase();
+    const tokens = trimmed.split(/\s+/);
+    for (const rule of NLP_RULES) {
+      if (rule.kw.some(k => lower.includes(k.toLowerCase())) && rule.sub.some(s => lower.includes(s.toLowerCase()))) {
+        return [_extractMatchLegacy(rule, tokens, trimmed, false)];
+      }
+    }
+    if (gameScope) {
+      for (const rule of NLP_RULES.filter(r => r.game === gameScope)) {
+        if (rule.sub.some(s => lower.includes(s.toLowerCase()))) {
+          return [_extractMatchLegacy(rule, tokens, trimmed, true)];
+        }
       }
     }
   }
-  return [];
+  return results;
 }
 
-function _extractMatch(rule, tokens, input, skipGameKw) {
+function _extractMatchLegacy(rule, tokens, input, skipGameKw) {
   const allKw = skipGameKw ? [...rule.sub] : [...rule.kw, ...rule.sub];
   let account = null;
   const numericTokens = [];
@@ -211,35 +290,65 @@ async function _nlpExec(input) {
     ? '已選' + GAMES[selectedGame].icon + '，直接輸入如：「ray1 改金幣 500000」'
     : '請先選擇平台，或輸入：「明星 ray1 改金幣 500000」';
   if (!parsed.length) return { ok: false, msg: '❌ 無法辨識指令。' + hint };
-  const p = parsed[0];
-  if (!p.account) return { ok: false, msg: '❌ 找不到帳號。' + hint };
-  const actions = GAME_ACTIONS[p.game];
-  if (!actions) return { ok: false, msg: '❌ 未知平台: ' + p.game };
-  const action = actions.find(a => a.id === p.actionId);
-  if (!action) return { ok: false, msg: '❌ 未知操作: ' + p.actionId };
-  const val = action.noVal ? null : (p.value || action.def);
-  const params = action.mapFn(p.account, val);
-  const g = GAMES[p.game];
-  const platform = g.platform();
-  try {
-    const r = await _execApi(platform.base, action.ep, params);
-    return { ok: r.ok, msg: r.ok ? `✅ ${g.icon} ${p.account} → ${action.label}${action.noVal ? '' : ' = ' + val}` : `❌ 失敗 HTTP ${r.status}`, detail: r.text };
-  } catch (e) {
-    return { ok: false, msg: '❌ 錯誤: ' + e.message };
+
+  // 多步驟依序執行（VF 操作有先後依賴，必須等前一步完成）
+  const allResults = [];
+  let allOk = true;
+  for (const p of parsed) {
+    if (!p.account) { allResults.push({ ok: false, msg: '❌ 找不到帳號/ID。' + hint }); allOk = false; continue; }
+    const actions = GAME_ACTIONS[p.game];
+    if (!actions) { allResults.push({ ok: false, msg: '❌ 未知平台: ' + p.game }); allOk = false; continue; }
+    const action = actions.find(a => a.id === p.actionId);
+    if (!action) { allResults.push({ ok: false, msg: '❌ 未知操作: ' + p.actionId }); allOk = false; continue; }
+    const val = action.noVal ? null : (p.value || action.def);
+    const params = action.mapFn(p.account, val);
+    const g = GAMES[p.game];
+    const platform = g.platform();
+    try {
+      const r = await _execApi(platform.base, action.ep, params);
+      // 執行 chainEps（如 BoltPower 後自動清賓果）
+      let chainMsg = '';
+      if (r.ok && action.chainEps && action.chainEps.length) {
+        const acctId = parseInt(p.account, 10) || 0;
+        for (const cep of action.chainEps) {
+          try {
+            const cr = await _execApi(platform.base, cep, { accountId: acctId });
+            chainMsg += ` → ${cr.ok ? '✅' : '❌'} ${cep}`;
+          } catch (ce) { chainMsg += ` → ❌ ${cep}: ${ce.message}`; }
+        }
+      }
+      const label = `${g.icon} ${p.account} → ${action.label}${action.noVal ? '' : ' = ' + val}${chainMsg}`;
+      allResults.push({ ok: r.ok, msg: r.ok ? `✅ ${label}` : `❌ 失敗 HTTP ${r.status}`, detail: r.text });
+      if (!r.ok) allOk = false;
+    } catch (e) {
+      allResults.push({ ok: false, msg: '❌ 錯誤: ' + e.message });
+      allOk = false;
+    }
   }
+
+  // 合併多步驟結果
+  if (allResults.length === 1) return allResults[0];
+  const combinedMsg = allResults.map((r, i) => `步驟${i + 1}: ${r.msg}`).join('\n');
+  const combinedDetail = allResults.map(r => r.detail || '').filter(Boolean).join('\n---\n');
+  return { ok: allOk, msg: (allOk ? '✅ 全部完成\n' : '⚠️ 部分失敗\n') + combinedMsg, detail: combinedDetail };
 }
 
 let _nlpHistory = [];
 
-// ── Proxy 智慧引擎 v3 ──
-// 設計目標：GitHub Pages 零本地依賴、高速、低錯誤率
+// ── Proxy 高速引擎 v4 ──
+// 設計目標：首次 ~1s、後續 <500ms
+// 策略：快取贏家代理 → 直接重用；失敗時才重新競速
+const _isGitHubPages = location.hostname.includes('github.io') || location.protocol === 'https:';
 let _localProxyOk = false;
-let _proxyStats = {}; // {proxyIdx: {ok:N, fail:N, avgMs:N}} — 追蹤成功率
+let _winnerProxyIdx = -1; // 快取最快代理索引
+let _winnerExpiry = 0;    // 快取到期時間
+const WINNER_TTL = 5 * 60 * 1000; // 5 分鐘快取
 
-// 開機自動偵測本地 proxy
+// 開機自動偵測本地 proxy（GitHub Pages 跳過）
 async function _detectLocalProxy() {
+  if (_isGitHubPages) { _localProxyOk = false; _updateProxyBadge(); return; }
   try {
-    const r = await fetch('http://localhost:8787/api/proxy?url=' + encodeURIComponent('https://example.com'), { signal: AbortSignal.timeout(2000) });
+    await fetch('http://localhost:8787/api/proxy?url=' + encodeURIComponent('https://example.com'), { signal: AbortSignal.timeout(1500) });
     _localProxyOk = true;
   } catch { _localProxyOk = false; }
   _updateProxyBadge();
@@ -259,105 +368,72 @@ function _updateProxyBadge() {
   }
 }
 
-// 帶超時的 fetch
-function _timedFetch(url, ms = 8000) {
+// 帶超時的 fetch（精簡版）
+function _timedFetch(url, ms = 4000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).then(r => { clearTimeout(timer); return r; });
+  return fetch(url, { signal: ctrl.signal }).then(r => { clearTimeout(timer); return r; })
+    .catch(e => { clearTimeout(timer); throw e; });
 }
 
-// 雲端代理池（6 個備選，分散風險）
+// 雲端代理池（精選 4 個最穩定的）
 const CLOUD_PROXIES = [
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   u => `https://corsproxy.org/?${encodeURIComponent(u)}`,
-  u => `https://proxy.cors.sh/${u}`,
-  u => `https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 
-// 記錄代理成功/失敗
-function _recordProxy(idx, ok, ms) {
-  if (!_proxyStats[idx]) _proxyStats[idx] = { ok: 0, fail: 0, totalMs: 0, count: 0 };
-  const s = _proxyStats[idx];
-  ok ? s.ok++ : s.fail++;
-  if (ms) { s.totalMs += ms; s.count++; }
-}
-
-// 取得排序後的代理索引（成功率高、速度快的排前面）
-function _rankedProxyIndices() {
-  const indices = CLOUD_PROXIES.map((_, i) => i);
-  return indices.sort((a, b) => {
-    const sa = _proxyStats[a], sb = _proxyStats[b];
-    if (!sa && !sb) return 0;
-    if (!sa) return 1;
-    if (!sb) return -1;
-    const rateA = sa.ok / (sa.ok + sa.fail || 1);
-    const rateB = sb.ok / (sb.ok + sb.fail || 1);
-    if (Math.abs(rateA - rateB) > 0.2) return rateB - rateA; // 成功率差異大 → 優先成功率高的
-    const avgA = sa.count ? sa.totalMs / sa.count : 9999;
-    const avgB = sb.count ? sb.totalMs / sb.count : 9999;
-    return avgA - avgB; // 速度快的排前
-  });
-}
-
 async function _fetchViaProxy(url) {
-  // 策略 1：本地 proxy 可用 → 優先走本地（最快最穩）
+  // 策略 1：本地 proxy 可用 → 直接走（最快）
   if (_localProxyOk) {
     try {
-      return await _timedFetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`, 8000);
+      return await _timedFetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`, 3000);
     } catch {
       _localProxyOk = false;
       _updateProxyBadge();
     }
   }
 
-  // 策略 2：智慧競速 — 依歷史表現排序，前 3 個競速
-  const ranked = _rankedProxyIndices();
-  const wave1 = ranked.slice(0, 3);
-  const wave2 = ranked.slice(3);
-
-  // Wave 1：前 3 個代理同時競速（8秒超時）
-  const wave1Promises = wave1.map(idx => {
-    const t0 = Date.now();
-    return _timedFetch(CLOUD_PROXIES[idx](url), 8000)
-      .then(r => {
-        if (!r.ok && r.status >= 500) throw new Error('5xx');
-        _recordProxy(idx, true, Date.now() - t0);
-        return r;
-      })
-      .catch(e => { _recordProxy(idx, false); throw e; });
-  });
-  // 也偷偷嘗試本地 proxy（萬一剛啟動）
-  wave1Promises.push(
-    _timedFetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`, 3000)
-      .then(r => { _localProxyOk = true; _updateProxyBadge(); return r; })
-      .catch(() => { throw new Error('local'); })
-  );
-  try { return await Promise.any(wave1Promises); } catch { /* Wave 1 全失敗 */ }
-
-  // Wave 2：剩餘 3 個代理同時競速（12秒超時）
-  if (wave2.length) {
-    const wave2Promises = wave2.map(idx => {
-      const t0 = Date.now();
-      return _timedFetch(CLOUD_PROXIES[idx](url), 12000)
-        .then(r => {
-          if (!r.ok && r.status >= 500) throw new Error('5xx');
-          _recordProxy(idx, true, Date.now() - t0);
-          return r;
-        })
-        .catch(e => { _recordProxy(idx, false); throw e; });
-    });
-    try { return await Promise.any(wave2Promises); } catch { /* Wave 2 全失敗 */ }
+  // 策略 2：有快取贏家 → 直接用（<200ms 省略競速）
+  if (_winnerProxyIdx >= 0 && Date.now() < _winnerExpiry) {
+    try {
+      const r = await _timedFetch(CLOUD_PROXIES[_winnerProxyIdx](url), 4000);
+      if (r.ok || r.status < 500) return r;
+    } catch { /* 贏家失效，重新競速 */ }
+    _winnerProxyIdx = -1;
   }
 
-  // 策略 3：最後逐一重試表現最好的前 3 個（15秒超時，最後手段）
-  for (const idx of ranked.slice(0, 3)) {
+  // 策略 3：全部代理同時競速（4秒超時）— 最快的勝出並快取
+  const racePromises = CLOUD_PROXIES.map((fn, idx) => {
+    return _timedFetch(fn(url), 4000)
+      .then(r => {
+        if (!r.ok && r.status >= 500) throw new Error('5xx');
+        // 記錄贏家
+        _winnerProxyIdx = idx;
+        _winnerExpiry = Date.now() + WINNER_TTL;
+        return r;
+      });
+  });
+
+  // GitHub Pages 不嘗試 localhost
+  if (!_isGitHubPages) {
+    racePromises.push(
+      _timedFetch(`http://localhost:8787/api/proxy?url=${encodeURIComponent(url)}`, 2000)
+        .then(r => { _localProxyOk = true; _updateProxyBadge(); return r; })
+        .catch(() => { throw new Error('local'); })
+    );
+  }
+
+  try { return await Promise.any(racePromises); } catch { /* 全部失敗 */ }
+
+  // 策略 4：最後手段 — 逐一重試前 2 個（6秒超時）
+  for (let i = 0; i < Math.min(2, CLOUD_PROXIES.length); i++) {
     try {
-      const t0 = Date.now();
-      const r = await _timedFetch(CLOUD_PROXIES[idx](url), 15000);
+      const r = await _timedFetch(CLOUD_PROXIES[i](url), 6000);
       if (r.ok || r.status < 500) {
-        _recordProxy(idx, true, Date.now() - t0);
+        _winnerProxyIdx = i;
+        _winnerExpiry = Date.now() + WINNER_TTL;
         return r;
       }
     } catch { /* next */ }
@@ -419,9 +495,9 @@ function selectGame(gameKey) {
 // ══════════════════════════════════════
 // COMMAND ROW MANAGEMENT
 // ══════════════════════════════════════
-function addRow(account = '', actionIdx = 0, value = null) {
+function addRow(account = '', actionIdx = 0, value = null, actionIdx2 = -1) {
   const id = rowIdCounter++;
-  cmdRows.push({ id, account, actionIdx, value });
+  cmdRows.push({ id, account, actionIdx, actionIdx2, value });
   _renderTable();
   // Focus the new row's account input after render
   setTimeout(() => { const el = document.getElementById('acc-' + id); if (el && !account) el.focus(); }, 50);
@@ -438,15 +514,17 @@ function duplicateRow(id) {
   if (!src) return;
   // Read current DOM values
   _syncRowFromDom(id);
-  addRow(src.account, src.actionIdx, src.value);
+  addRow(src.account, src.actionIdx, src.value, src.actionIdx2 || -1);
 }
 
 function _syncRowFromDom(id) {
   const row = cmdRows.find(r => r.id === id); if (!row) return;
   const accEl = document.getElementById('acc-' + id);
   const actEl = document.getElementById('act-' + id);
+  const act2El = document.getElementById('act2-' + id);
   if (accEl) row.account = accEl.value.trim();
   if (actEl) row.actionIdx = parseInt(actEl.value, 10);
+  if (act2El) row.actionIdx2 = parseInt(act2El.value, 10);
   // multiVal: sync each field
   if (selectedGame) {
     const action = GAME_ACTIONS[selectedGame][row.actionIdx];
@@ -509,12 +587,17 @@ function _renderTable() {
   tbody.innerHTML = cmdRows.map(row => {
     const action = actions[row.actionIdx] || actions[0];
     const inputLabel = g.inputLabel || '帳號';
+    const act2Val = row.actionIdx2 !== undefined ? row.actionIdx2 : -1;
     return `<tr class="cmd-row" id="row-${row.id}">
       <td><input class="fi row-acc" type="text" id="acc-${row.id}" value="${_esc(row.account)}" placeholder="${inputLabel}" autocomplete="off"></td>
       <td><select class="fi row-act" id="act-${row.id}" onchange="onActionChange(${row.id})">
         ${actions.map((a, i) => `<option value="${i}" ${i === row.actionIdx ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
       </select></td>
       <td id="valcell-${row.id}">${_buildValHtml(action, row)}</td>
+      <td><select class="fi row-act row-act2" id="act2-${row.id}" title="操作B（可選，預設無）">
+        <option value="-1" ${act2Val === -1 ? 'selected' : ''}>— 無 —</option>
+        ${actions.map((a, i) => `<option value="${i}" ${i === act2Val ? 'selected' : ''}>${a.icon} ${a.label}</option>`).join('')}
+      </select></td>
       <td class="row-actions">
         <button class="row-btn row-btn-dup" onclick="duplicateRow(${row.id})" title="複製此行">📋</button>
         <button class="row-btn row-btn-del" onclick="removeRow(${row.id})" title="刪除此行">✕</button>
@@ -558,9 +641,9 @@ function _doBatchAdd() {
   // If only 1 empty row exists, replace it
   if (cmdRows.length === 1 && !cmdRows[0].account) {
     cmdRows[0].account = accounts[0];
-    accounts.slice(1).forEach(a => { const id = rowIdCounter++; cmdRows.push({ id, account: a, actionIdx: cmdRows[0].actionIdx, value: null }); });
+    accounts.slice(1).forEach(a => { const id = rowIdCounter++; cmdRows.push({ id, account: a, actionIdx: cmdRows[0].actionIdx, actionIdx2: cmdRows[0].actionIdx2 || -1, value: null }); });
   } else {
-    accounts.forEach(a => { const id = rowIdCounter++; cmdRows.push({ id, account: a, actionIdx: 0, value: null }); });
+    accounts.forEach(a => { const id = rowIdCounter++; cmdRows.push({ id, account: a, actionIdx: 0, actionIdx2: -1, value: null }); });
   }
   _renderTable();
   toast(`已新增 ${accounts.length} 個帳號`, 'info');
@@ -571,7 +654,7 @@ function applyToAll() {
   _syncAllRows();
   if (!cmdRows.length) return;
   const first = cmdRows[0];
-  cmdRows.forEach(r => { r.actionIdx = first.actionIdx; r.value = first.value; });
+  cmdRows.forEach(r => { r.actionIdx = first.actionIdx; r.actionIdx2 = first.actionIdx2 !== undefined ? first.actionIdx2 : -1; r.value = first.value; });
   _renderTable();
   toast('已套用第一行設定到所有行', 'info');
 }
@@ -635,9 +718,29 @@ async function execSubmit() {
           } catch (e) { return { ep: cep, ok: false, text: e.message }; }
         }));
       }
+      // 執行操作B（若有設定）
+      let action2Result = null;
+      const act2Idx = row.actionIdx2 !== undefined ? row.actionIdx2 : -1;
+      if (act2Idx >= 0 && actions[act2Idx]) {
+        const action2 = actions[act2Idx];
+        let params2;
+        if (action2.noVal) {
+          params2 = action2.mapFn(row.account, null);
+        } else {
+          params2 = action2.mapFn(row.account, action2.def);
+        }
+        try {
+          const r2 = await _execApi(platform.base, action2.ep, params2);
+          action2Result = { label: action2.label, ok: r2.ok, text: r2.text };
+        } catch (e2) {
+          action2Result = { label: action2.label, ok: false, text: e2.message };
+        }
+      }
       const chainOk = chainResults.every(c => c.ok);
       const chainDetail = chainResults.map(c => `${c.ok ? '✅' : '❌'} ${c.ep}`).join(', ');
-      return { account: row.account, action: action.label, ok: r.ok && chainOk, status: r.status, text: r.text + (chainResults.length ? ` | 連鎖: ${chainDetail}` : '') };
+      const act2Ok = action2Result ? action2Result.ok : true;
+      const act2Detail = action2Result ? ` | 操作B: ${action2Result.ok ? '✅' : '❌'} ${action2Result.label}` : '';
+      return { account: row.account, action: action.label + (action2Result ? ' → ' + action2Result.label : ''), ok: r.ok && chainOk && act2Ok, status: r.status, text: r.text + (chainResults.length ? ` | 連鎖: ${chainDetail}` : '') + act2Detail };
     } catch (e) { return { account: row.account, action: action.label, ok: false, status: 0, text: e.message }; }
   }));
 
@@ -709,7 +812,7 @@ function renderApp() {
         </div>
         <div class="table-wrap">
           <table class="cmd-table">
-            <thead><tr><th id="thAccount">帳號</th><th>操作</th><th>數值</th><th style="width:70px"></th></tr></thead>
+            <thead><tr><th id="thAccount">帳號</th><th>操作A</th><th>數值</th><th>操作B（選填）</th><th style="width:70px"></th></tr></thead>
             <tbody id="cmdTbody"></tbody>
           </table>
         </div>
@@ -719,8 +822,10 @@ function renderApp() {
       <div class="section-card">
         <div class="section-title"><span class="step-num">💬</span> 口語化指令（直接輸入即執行）</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:12px;line-height:1.8">
-          上方已選平台時，直接輸入帳號＋操作＋數值即可<br>
-          範例：「ray1 改金幣 500000」「ray10 vip 8」（也可加平台名：「明星 ray1 改金幣 500000」）
+          上方已選平台時，直接輸入帳號/編號＋操作＋數值即可<br>
+          🎰 VF 範例：「163436 改金幣 500000」「163436 先清除賓果再改BP12」<br>
+          ⭐ AIO 範例：「ray1 改金幣 500000」「明星 ray1 vip 8」<br>
+          💡 多步驟：用「先…再…」或「然後」串接，如「163436 先清除賓果再改BP12」
         </div>
         <div style="display:flex;gap:8px;margin-bottom:14px">
           <input class="fi" type="text" id="nlpInput" placeholder="ray1 改金幣 500000" style="flex:1" onkeydown="if(event.key==='Enter')nlpSubmit()">
