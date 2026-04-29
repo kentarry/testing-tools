@@ -551,9 +551,11 @@ function clearAllData() {
     row.value = null;
     row.value2 = undefined;
     row.valueB = '';
+    row.valueB2 = undefined;
     row.actionIdx = 0;
     row.actionIdx2 = -1;
     row.fieldValues = {};
+    row.fieldValuesB = {};
   });
   _renderTable();
   // 清除行狀態
@@ -577,13 +579,12 @@ function _syncRowFromDom(id) {
   const accEl = document.getElementById('acc-' + id);
   const actEl = document.getElementById('act-' + id);
   const act2El = document.getElementById('act2-' + id);
-  const valBEl = document.getElementById('valB-' + id);
   if (accEl) row.account = accEl.value.trim();
   if (actEl) row.actionIdx = parseInt(actEl.value, 10);
   if (act2El) row.actionIdx2 = parseInt(act2El.value, 10);
-  if (valBEl) row.valueB = valBEl.value;
-  // multiVal: sync each field
+
   if (selectedGame) {
+    // Action A
     const action = GAME_ACTIONS[selectedGame][row.actionIdx];
     if (action && action.multiVal && action.fields) {
       if (!row.fieldValues) row.fieldValues = {};
@@ -591,13 +592,31 @@ function _syncRowFromDom(id) {
         const el = document.getElementById('mf-' + f.k + '-' + id);
         if (el) row.fieldValues[f.k] = el.value;
       });
-      return;
+    } else {
+      const valEl = document.getElementById('val-' + id);
+      const val2El = document.getElementById('val2-' + id);
+      if (valEl) row.value = valEl.value;
+      if (val2El) row.value2 = val2El.value;
+    }
+
+    // Action B
+    const action2 = row.actionIdx2 >= 0 ? GAME_ACTIONS[selectedGame][row.actionIdx2] : null;
+    if (action2 && action2.multiVal && action2.fields) {
+      if (!row.fieldValuesB) row.fieldValuesB = {};
+      action2.fields.forEach(f => {
+        const el = document.getElementById('mfB-' + f.k + '-' + id);
+        if (el) row.fieldValuesB[f.k] = el.value;
+      });
+    } else if (action2 && action2.dualVal) {
+      const valBEl = document.getElementById('valB-' + id);
+      const valB2El = document.getElementById('valB2-' + id);
+      if (valBEl) row.valueB = valBEl.value;
+      if (valB2El) row.valueB2 = valB2El.value;
+    } else {
+      const valBEl = document.getElementById('valB-' + id);
+      if (valBEl) row.valueB = valBEl.value;
     }
   }
-  const valEl = document.getElementById('val-' + id);
-  const val2El = document.getElementById('val2-' + id);
-  if (valEl) row.value = valEl.value;
-  if (val2El) row.value2 = val2El.value;
 }
 
 function _syncAllRows() {
@@ -650,11 +669,23 @@ function _buildValHtml(action, row) {
 function _buildValBHtml(act2Idx, row) {
   if (!selectedGame || act2Idx < 0) return '';
   const actions = GAME_ACTIONS[selectedGame];
-  const action2 = actions[act2Idx];
-  if (!action2) return '';
-  if (action2.noVal) return `<span class="no-val-tag">無需數值</span>`;
+  const action = actions[act2Idx];
+  if (!action) return '';
+  if (action.noVal) return `<span class="no-val-tag">無需數值</span>`;
+  if (action.multiVal && action.fields) {
+    const fv = row.fieldValuesB || {};
+    return `<div style="display:flex;gap:6px">${action.fields.map(f => {
+      const hasVal = fv[f.k] !== undefined && fv[f.k] !== '';
+      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" id="mfB-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
+    }).join('')}</div>`;
+  }
+  if (action.dualVal) {
+    const hasV1 = row.valueB !== null && row.valueB !== '' && row.valueB !== undefined;
+    const hasV2 = row.valueB2 !== undefined && row.valueB2 !== '' && row.valueB2 !== null;
+    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" id="valB-${row.id}" value="${hasV1 ? row.valueB : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" id="valB2-${row.id}" value="${hasV2 ? row.valueB2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
+  }
   const hasVal = row.valueB !== undefined && row.valueB !== '';
-  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${hasVal ? row.valueB : ''}" placeholder="${action2.def || '數值'}" title="${action2.vLabel || '數值'}（預設：${action2.def || ''}）" style="width:100%">`;
+  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${hasVal ? row.valueB : ''}" placeholder="${action.def || '數值'}" title="${action.vLabel || '數值'}（預設：${action.def || ''}）" style="width:100%">`;
 }
 
 function onAction2Change(id) {
@@ -667,8 +698,15 @@ function onAction2Change(id) {
   if (act2Idx >= 0 && actions[act2Idx]) {
     const action2 = actions[act2Idx];
     row.valueB = action2.noVal ? '' : String(action2.def || '');
+    if (action2.dualVal) row.valueB2 = String(action2.def2 || '');
+    if (action2.multiVal && action2.fields) {
+      row.fieldValuesB = {};
+      action2.fields.forEach(f => row.fieldValuesB[f.k] = String(f.def));
+    }
   } else {
     row.valueB = '';
+    row.valueB2 = '';
+    row.fieldValuesB = {};
   }
   const valBCell = document.getElementById('valBcell-' + id);
   if (valBCell) valBCell.innerHTML = _buildValBHtml(act2Idx, row);
@@ -822,7 +860,19 @@ async function execSubmit() {
       if (act2Idx >= 0 && actions[act2Idx]) {
         const action2 = actions[act2Idx];
         let params2;
-        if (action2.noVal) {
+        if (action2.multiVal && action2.fields) {
+          const fvB = row.fieldValuesB || {};
+          const fieldObjB = {};
+          action2.fields.forEach(f => {
+            if (f.type === 'text') fieldObjB[f.k] = fvB[f.k] !== undefined ? String(fvB[f.k]) : String(f.def);
+            else fieldObjB[f.k] = parseInt(fvB[f.k], 10) || f.def;
+          });
+          params2 = action2.mapFn(row.account, fieldObjB);
+        } else if (action2.dualVal) {
+          const valB = parseInt(row.valueB, 10) || action2.def;
+          const valB2 = parseInt(row.valueB2, 10) || action2.def2;
+          params2 = action2.mapFn(row.account, valB, valB2);
+        } else if (action2.noVal) {
           params2 = action2.mapFn(row.account, null);
         } else {
           const valB = (row.valueB !== undefined && row.valueB !== '') ? (parseInt(row.valueB, 10) || action2.def) : action2.def;
