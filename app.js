@@ -653,16 +653,17 @@ function _buildValHtml(action, row) {
     const fv = row.fieldValues || {};
     return `<div style="display:flex;gap:6px">${action.fields.map(f => {
       const hasVal = fv[f.k] !== undefined && fv[f.k] !== '';
-      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" id="mf-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
+      const numAttr = f.type !== 'text' ? 'min="0" oninput="if(this.value<0)this.value=0;"' : '';
+      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:normal;line-height:1.15;min-height:22px;display:flex;align-items:flex-end">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" ${numAttr} id="mf-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
     }).join('')}</div>`;
   }
   if (action.dualVal) {
     const hasV1 = row.value !== null && row.value !== '' && row.value !== undefined;
     const hasV2 = row.value2 !== undefined && row.value2 !== '' && row.value2 !== null;
-    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" id="val-${row.id}" value="${hasV1 ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" id="val2-${row.id}" value="${hasV2 ? row.value2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
+    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="val-${row.id}" value="${hasV1 ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="val2-${row.id}" value="${hasV2 ? row.value2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
   }
   const hasVal = row.value !== null && row.value !== '' && row.value !== undefined;
-  return `<input class="fi row-val" type="number" id="val-${row.id}" value="${hasVal ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）">`;
+  return `<input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="val-${row.id}" value="${hasVal ? row.value : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）">`;
 }
 
 // 操作B 數值欄位 HTML
@@ -676,16 +677,17 @@ function _buildValBHtml(act2Idx, row) {
     const fv = row.fieldValuesB || {};
     return `<div style="display:flex;gap:6px">${action.fields.map(f => {
       const hasVal = fv[f.k] !== undefined && fv[f.k] !== '';
-      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" id="mfB-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
+      const numAttr = f.type !== 'text' ? 'min="0" oninput="if(this.value<0)this.value=0;"' : '';
+      return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--t3);margin-bottom:2px;white-space:normal;line-height:1.15;min-height:22px;display:flex;align-items:flex-end">${f.lbl}</div><input class="fi row-val" type="${f.type === 'text' ? 'text' : 'number'}" ${numAttr} id="mfB-${f.k}-${row.id}" value="${hasVal ? fv[f.k] : ''}" placeholder="${f.def}" title="${f.lbl}（預設：${f.def}）" style="width:100%"></div>`;
     }).join('')}</div>`;
   }
   if (action.dualVal) {
     const hasV1 = row.valueB !== null && row.valueB !== '' && row.valueB !== undefined;
     const hasV2 = row.valueB2 !== undefined && row.valueB2 !== '' && row.valueB2 !== null;
-    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" id="valB-${row.id}" value="${hasV1 ? row.valueB : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" id="valB2-${row.id}" value="${hasV2 ? row.valueB2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
+    return `<div style="display:flex;gap:4px"><input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="valB-${row.id}" value="${hasV1 ? row.valueB : ''}" placeholder="${action.def}" title="${action.vLabel}（預設：${action.def}）" style="flex:1"><input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="valB2-${row.id}" value="${hasV2 ? row.valueB2 : ''}" placeholder="${action.def2}" title="${action.vLabel2}（預設：${action.def2}）" style="flex:1"></div>`;
   }
   const hasVal = row.valueB !== undefined && row.valueB !== '';
-  return `<input class="fi row-val" type="number" id="valB-${row.id}" value="${hasVal ? row.valueB : ''}" placeholder="${action.def || '數值'}" title="${action.vLabel || '數值'}（預設：${action.def || ''}）" style="width:100%">`;
+  return `<input class="fi row-val" type="number" min="0" oninput="if(this.value<0)this.value=0;" id="valB-${row.id}" value="${hasVal ? row.valueB : ''}" placeholder="${action.def || '數值'}" title="${action.vLabel || '數值'}（預設：${action.def || ''}）" style="width:100%">`;
 }
 
 function onAction2Change(id) {
@@ -697,11 +699,12 @@ function onAction2Change(id) {
   // 重設 valueB
   if (act2Idx >= 0 && actions[act2Idx]) {
     const action2 = actions[act2Idx];
-    row.valueB = action2.noVal ? '' : String(action2.def || '');
-    if (action2.dualVal) row.valueB2 = String(action2.def2 || '');
+    row.valueB = '';
+    if (action2.dualVal) row.valueB2 = '';
     if (action2.multiVal && action2.fields) {
       row.fieldValuesB = {};
-      action2.fields.forEach(f => row.fieldValuesB[f.k] = String(f.def));
+      // 這裡也為空，不帶入預設值 f.def
+      action2.fields.forEach(f => row.fieldValuesB[f.k] = '');
     }
   } else {
     row.valueB = '';
